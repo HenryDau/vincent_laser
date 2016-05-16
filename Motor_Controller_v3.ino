@@ -4,7 +4,7 @@ const int UPDATE = 50; // number of samples between serial data updates
 const bool SERIAL_OUTPUT = true; // set to true to send data out serial line
 const bool SERIAL_DIAGNOSE = false; // set to true to send back what was recieved
 const float EncoderScaling = 2 * 3.141 / 1440; // Encoder counts to radians
-const int MAX_CHANGE = 5; // If the position of an ecoder jumps by more than this number, flag an error
+const int MAX_CHANGE = 10; // If the position of an encoder jumps by more than this number, flag an error
 
 // Digial/output
 //   Motor
@@ -16,6 +16,7 @@ const int PWMB = 10;
 const int DIRB = 8;
 const int DIRC = 5;
 const int PWMC = 6;
+
 
 // Speed Controller gains
 const float P = 1000;
@@ -74,8 +75,9 @@ volatile long _ThirdEncoderTicks = 0;
 
 
 // Controller variables
-float Pos1 = 0;
-float Pos1old = 0;
+int Pos1 = 0;
+int Pos1old = 0;
+float Pos1rad = 0;
 volatile float ref1 = 0;
 float xvel1 = 0;
 float err1 = 0;
@@ -83,8 +85,9 @@ float err1int = 0;
 float u1;
 int uint1;
 
-float Pos2 = 0;
-float Pos2old = 0;
+int Pos2 = 0;
+int Pos2old = 0;
+float Pos2rad = 0;
 volatile float ref2 = 0;
 float xvel2 = 0;
 float err2 = 0;
@@ -92,8 +95,9 @@ float err2int = 0;
 float u2;
 int uint2;
 
-float Pos3 = 0;
-float Pos3old = 0;
+int Pos3 = 0;
+int Pos3old = 0;
+float Pos3rad = 0;
 volatile float ref3 = 0;
 float xvel3 = 0;
 float err3 = 0;
@@ -129,20 +133,20 @@ void setup() {
 
   // Quadrature encoders
   // Left encoder
-  pinMode(c_FirstEncoderPinA, INPUT);      // sets pin A as input
-  digitalWrite(c_FirstEncoderPinA, LOW);  // turn on pullup resistors
-  pinMode(c_FirstEncoderPinB, INPUT);      // sets pin B as input
-  digitalWrite(c_FirstEncoderPinB, LOW);  // turn on pullup resistors
+  pinMode(c_FirstEncoderPinA, INPUT_PULLUP);     // sets pin A as input
+  //digitalWrite(c_FirstEncoderPinA, LOW);  // turn on pullup resistors
+  pinMode(c_FirstEncoderPinB, INPUT_PULLUP);      // sets pin B as input
+  //digitalWrite(c_FirstEncoderPinB, LOW);  // turn on pullup resistors
   
-  pinMode(c_SecondEncoderPinA, INPUT);      // sets pin A as input
-  digitalWrite(c_SecondEncoderPinA, LOW);  // turn on pullup resistors
-  pinMode(c_SecondEncoderPinB, INPUT);      // sets pin B as input
-  digitalWrite(c_SecondEncoderPinB, LOW);  // turn on pullup resistors
+  pinMode(c_SecondEncoderPinA, INPUT_PULLUP);      // sets pin A as input
+  //digitalWrite(c_SecondEncoderPinA, LOW);  // turn on pullup resistors
+  pinMode(c_SecondEncoderPinB, INPUT_PULLUP);      // sets pin B as input
+  //digitalWrite(c_SecondEncoderPinB, LOW);  // turn on pullup resistors
   
-  pinMode(c_ThirdEncoderPinA, INPUT);      // sets pin A as input
-  digitalWrite(c_ThirdEncoderPinA, LOW);  // turn on pullup resistors
-  pinMode(c_ThirdEncoderPinB, INPUT);      // sets pin B as input
-  digitalWrite(c_ThirdEncoderPinB, LOW);  // turn on pullup resistors
+  pinMode(c_ThirdEncoderPinA, INPUT_PULLUP);      // sets pin A as input
+  //digitalWrite(c_ThirdEncoderPinA, LOW);  // turn on pullup resistors
+  pinMode(c_ThirdEncoderPinB, INPUT_PULLUP);      // sets pin B as input
+  //digitalWrite(c_ThirdEncoderPinB, LOW);  // turn on pullup resistors
   
   attachInterrupt(digitalPinToInterrupt(c_FirstEncoderPinA), HandleLeftMotorInterruptA, CHANGE);
   attachInterrupt(digitalPinToInterrupt(c_FirstEncoderPinB), HandleLeftMotorInterruptB, CHANGE);
@@ -288,25 +292,23 @@ void loop() {
   }
   //  incomingByte = 0;
 
-  // TODO: Make problem a thing. Should happen when Pos jumps by +-5. 
-  // Should also disable the motor enable pin
-  // Also print if problem happens, and make a clear for problem if the user disables it with the monitor.
   if (!problem){    
     // Read First encoder
-    Pos1 = EncoderScaling * (float)_FirstEncoderTicks;
+    Pos1 = _FirstEncoderTicks;
 
     // Check for an error
     if (difference(Pos1, Pos1old) >= MAX_CHANGE){
       problem = true;
       Serial.println("Error in Encoder 1. Type 'OK' to issue commands again");
     }
-    
-    xvel1 = -(float)(Pos1 - Pos1old);
+
+    Pos1rad = EncoderScaling * (float)Pos1;
+    xvel1 = -EncoderScaling * (float)(Pos1 - Pos1old);
     xvel1 = xvel1 * 1000000.0 / (float)Ts;
     Pos1old = Pos1;
   
     // Position Control
-    err1 = ref1 - Pos1;
+    err1 = ref1 - Pos1rad;
     err1int = err1int + err1 * Ts / 1000000.0;
     u1 = (int)(P * err1 + Pd * xvel1 + PInt * err1int);
     // Anti-windup
@@ -321,17 +323,20 @@ void loop() {
     }
   
     // Read Second encoder
-    Pos2 = EncoderScaling * (float)_SecondEncoderTicks;
+    Pos2 = _SecondEncoderTicks;
 
     // Check for an error
     if (difference(Pos2, Pos2old) >= MAX_CHANGE){
       problem = true;
       Serial.println("Error in Encoder 2. Type 'OK' to issue commands again");
     }
+    Pos2rad = EncoderScaling * (float)Pos2;
+    xvel2 = -EncoderScaling * (float)(Pos2 - Pos2old);
+    xvel2 = xvel2 * 1000000.0 / (float)Ts;
     Pos2old = Pos2;
     
     // Position Control
-    err2 = ref2 - Pos2;
+    err2 = ref2 - Pos2rad;
     err2int = err2int + err2 * Ts / 1000000.0;
     u2 = (int)(P * err2 + Pd * xvel2 + PInt * err2int);
     // Anti-windup
@@ -346,18 +351,20 @@ void loop() {
     }
     
     // Read Third encoder
-    Pos3 = EncoderScaling * (float)_ThirdEncoderTicks;
+    Pos3 = _ThirdEncoderTicks;
 
     // Check for an error
     if (difference(Pos3, Pos3old) >= MAX_CHANGE){
       problem = true;
       Serial.println("Error in Encoder 3. Type 'OK' to issue commands again");
     }
-
+    Pos3rad = EncoderScaling * (float)Pos3;
+    xvel3 = -EncoderScaling * (float)(Pos3 - Pos3old);
+    xvel3 = xvel3 * 1000000.0 / (float)Ts;
     Pos3old = Pos3;
     
     // Position Control
-    err3 = ref3 - Pos3;
+    err3 = ref3 - Pos3rad;
     err3int = err3int + err3 * Ts / 1000000.0;
     u3 = (int)(P * err3 + Pd * xvel3 + PInt * err3int);
     // Anti-windup
@@ -386,7 +393,7 @@ void loop() {
     if (SERIAL_OUTPUT) {
       Serial.print(ref1, 4);
       Serial.print("\t");
-      Serial.print(Pos1, 4);
+      Serial.print(Pos1rad, 4);
       Serial.print("\t");
       Serial.print(u1);
       Serial.print("\t");
@@ -395,7 +402,7 @@ void loop() {
       Serial.print("\t");
       Serial.print(ref2, 4);
       Serial.print("\t");
-      Serial.print(Pos2, 4);
+      Serial.print(Pos2rad, 4);
       Serial.print("\t");
       Serial.print(u2);
       Serial.print("\t");
@@ -404,7 +411,7 @@ void loop() {
       Serial.print("\t");
       Serial.print(ref3, 4);
       Serial.print("\t");
-      Serial.print(Pos3, 4);
+      Serial.print(Pos3rad, 4);
       Serial.print("\t");
       Serial.print(u3);
       Serial.print("\t");
@@ -414,6 +421,7 @@ void loop() {
       Serial.print(current_time - last_time);
       Serial.print("\t");
       Serial.println(problem);
+
       k = 1;
     }
   }
@@ -475,6 +483,7 @@ void HandleLeftMotorInterruptA() {
 
 // Interrupt service routines for the right motor's quadrature encoder
 void HandleLeftMotorInterruptB() {
+
   // Test transition;
   _FirstEncoderBSet = digitalReadFast(c_FirstEncoderPinB);
   _FirstEncoderASet = digitalReadFast(c_FirstEncoderPinA);
@@ -546,6 +555,7 @@ int ParseEncoder(bool APrev, bool BPrev, bool ASet, bool BSet) {
     if (ASet && BSet) return 1;
     if (!ASet && !BSet) return -1;
   }
+  return 0;
 }
 
 int sgn(int val) {
