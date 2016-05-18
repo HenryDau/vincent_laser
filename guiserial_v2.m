@@ -251,11 +251,13 @@ if (handles.index < nrows)
     if (handles.position_setpoints(handles.index, 1) == handles.timer.TasksExecuted * handles.timer.AveragePeriod)
         % Write new positions to the motors TODO: make sure motors are being
         % written to correctly
-        disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
-        %fprintf(handles.obj,'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
-        %fprintf(handles.obj,'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
-        %fprintf(handles.obj,'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
-        handles.index = handles.index + 1;
+        %disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
+        fprintf(handles.obj,'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
+        pause(.015);
+        fprintf(handles.obj,'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
+        pause(.015);
+        fprintf(handles.obj,'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
+        pause(.015);
     end
 end
 
@@ -308,7 +310,7 @@ if (~isempty(Value))
         set(h,'String',dataarray{12});
     end
 end
-%disp('data read')
+disp('data read')
 guidata(fighandle,handles);
 
 function PositionSetpoint2_Callback(hObject, eventdata, handles)

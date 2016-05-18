@@ -22,7 +22,7 @@ const int PWMC = 6;
 const float P = 1000;
 const float Pd = 50;
 const float PInt = 2000;
-const float umax = 75;
+const float umax = 150;
 
 // Switches
 //#define DECREASE 16
@@ -72,6 +72,8 @@ volatile bool _ThirdEncoderBSet;
 volatile bool _ThirdEncoderAPrev;
 volatile bool _ThirdEncoderBPrev;
 volatile long _ThirdEncoderTicks = 0;
+
+bool data_request = false;
 
 
 // Controller variables
@@ -186,7 +188,8 @@ void setup() {
   //   digitalWrite(TIGHTEN, HIGH); // use internal pullup resistor
   
 
-  if (SERIAL_OUTPUT) {
+  //if (SERIAL_OUTPUT) {
+  if (0){
     Serial.println();
     Serial.print("M1 StPt");
     Serial.print("\t");
@@ -213,6 +216,7 @@ void setup() {
     Serial.print("M3 Volt");
     Serial.print("\t");
     Serial.print("M3 Err");
+    Serial.print("\t");
     Serial.print("\t");
     Serial.print("Exe Time");  //Time to Execute
     Serial.print("\t");
@@ -262,25 +266,8 @@ void loop() {
             break;
         }
         break;
-//        case 'R': // Ramp to position
-//          tempstring=inputString.substring(2);
-//          tighten = FALSE;
-////          Serial.println(tempstring);
-//        switch (inputString.charAt(1)) {
-//          case '1':
-//            ref1 = EncoderScaling * (float)tempstring.toInt();
-//            break;
-//          case '2':
-//            ref2 = EncoderScaling * (float)tempstring.toInt();
-//            break;
-//          default:
-//            // nothing
-//            break;
-//        }
-//        break;
-      case 84: // T
-        tighten = TRUE;
-        
+      case 'R':
+        data_request = true;
         break;
       default:
         // nothing
@@ -385,11 +372,8 @@ void loop() {
 
   // Data Outputs
 
-  k = k + 1;
-  if (k >= UPDATE) {
-    if (tighten & (abs(err1int) < .02)) {
-      ref1 = ref1 - EncoderScaling * 10;
-    }
+  //k = k + 1;
+  if (data_request) {
     if (SERIAL_OUTPUT) {
       Serial.print(ref1, 4);
       Serial.print("\t");
@@ -422,7 +406,7 @@ void loop() {
       Serial.print("\t");
       Serial.println(problem);
 
-      k = 1;
+      data_request = false;
     }
   }
   current_time = micros();
