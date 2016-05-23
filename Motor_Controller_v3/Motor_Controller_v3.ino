@@ -273,12 +273,15 @@ void loop() {
         switch (inputString.charAt(1)) {
             case '1':
               _FirstEncoderTicks = 0;
+              Pos1old = 0;
               break;
             case '2':
               _SecondEncoderTicks = 0;
+              Pos2old = 0;
               break;
             case '3':
               _ThirdEncoderTicks = 0;
+              Pos3old = 0;
               break;
             default:
               // nothing

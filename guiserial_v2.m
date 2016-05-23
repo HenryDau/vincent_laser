@@ -146,7 +146,7 @@ case(1)
     disp('Opening Arduino Connections: Starting timer object')
     %obj = serial('/dev/cu.usbmodem1451');
     %set(obj,'BaudRate',115200)
-    obj = serial('COM6', 'BaudRate', 115200);
+    obj = serial('COM6', 'BaudRate', 115200 ,'Timeout',.015);
     %obj.BytesAvailableFcn = {@timer_callback,handles.guiserial};
     %obj.BytesAvailableFcnMode = 'terminator';
     t = timer('ExecutionMode', 'fixedRate', 'Period', .5);
@@ -156,6 +156,7 @@ case(1)
     handles.obj = obj;
     handles.position_data =[];
     handles.time_stamp = [];
+    handles.pos_command_with_backlash = [];
     if(strcmp(get(obj,'status'),'closed')),
       fopen(obj);
     end;
@@ -215,9 +216,12 @@ case(0)
     fileID = fopen('log.txt', 'w');
     [~,nrows] = size(handles.position_data);
     for row = 1:nrows
-        fprintf(fileID,'%5.2f\t', handles.time_stamp(1, row));
-        fprintf(fileID,'%3.5f\t',handles.power_data(2, row));
-        fprintf(fileID,'%s', handles.position_data{1,row});
+        if (~isempty(handles.position_data{1,row}))
+            fprintf(fileID,'%5.2f\t', handles.time_stamp(1, row));
+            fprintf(fileID,'%3.5f\t',handles.power_data(2, row));
+            fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
+            fprintf(fileID,'%s', handles.position_data{1,row});
+        end
     end
     fclose(fileID);
     disp('Output to file: log.txt');
@@ -257,31 +261,39 @@ if (handles.index < nrows)
 
     % Look at the position_setpoints to see if motor instructions need to be
     % sent out (if true, then the motor needs to change position)
-    if (handles.position_setpoints(handles.index, 1) == handles.timer.TasksExecuted * handles.timer.AveragePeriod)
+    %    if (handles.position_setpoints(handles.index, 1) == handles.timer.TasksExecuted * handles.timer.AveragePeriod)
         % Write new positions to the motors
         %disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
-        if (handles.position_setpoints(handles.index, 2) - handles.position_setpoints(handles.index - 1, 2) > 0)
+
+        EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+        set(handles.screw_pos_1, 'String', handles.position_setpoints(handles.index, 2) * EncoderScaling);
+        if (handles.position_setpoints(handles.index, 2) - handles.position_setpoints(handles.index - 1, 2) >= 0)
             fprintf(handles.obj,'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
         else
             fprintf(handles.obj,'%s\n',['P1', ...
-                   (int2str(handles.position_setpoints(handles.index, 2)) - get(handles.backlash_1,'String'))])
+                   (int2str((handles.position_setpoints(handles.index, 2)) - eval(get(handles.backlash_1,'String'))))])
         end
         pause(.015);
-        if (handles.position_setpoints(handles.index, 3) - handles.position_setpoints(handles.index - 1, 3) > 0)
+
+        set(handles.screw_pos_2, 'String', handles.position_setpoints(handles.index, 3) * EncoderScaling);
+        if (handles.position_setpoints(handles.index, 3) - handles.position_setpoints(handles.index - 1, 3) >= 0)
             fprintf(handles.obj,'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
         else
             fprintf(handles.obj,'%s\n',['P2', ...
-                   (int2str(handles.position_setpoints(handles.index, 3)) - get(handles.backlash_2,'String'))])
+                   (int2str((handles.position_setpoints(handles.index, 3)) - eval(get(handles.backlash_2,'String'))))])
         end
         pause(.015);
-        if (handles.position_setpoints(handles.index, 4) - handles.position_setpoints(handles.index - 1, 4) > 0)
+
+        set(handles.screw_pos_3, 'String', handles.position_setpoints(handles.index, 4) * EncoderScaling);
+        if (handles.position_setpoints(handles.index, 4) - handles.position_setpoints(handles.index - 1, 4) >= 0)
             fprintf(handles.obj,'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
         else
             fprintf(handles.obj,'%s\n',['P3', ...
-                   (int2str(handles.position_setpoints(handles.index, 4)) - get(handles.backlash_3,'String'))])
+                   (int2str((handles.position_setpoints(handles.index, 4)) - eval(get(handles.backlash_3,'String'))))])
         end
         pause(.015);
-    end
+
+   % end
 end
 
 % Read from the laser
@@ -290,8 +302,10 @@ end
 %Check to see if the laser value is valid
 if (~isempty(Value))
     
+    pause(.015);
     %Request arduino data
     fprintf(handles.obj,'%s\n','D');
+    pause(.015);
 
     handles.time_stamp(1, end+1) = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
     handles.power_data(2,end+1) = Value(end); %Only log the last sample
@@ -299,6 +313,9 @@ if (~isempty(Value))
     h=findobj(handles.guiserial,'Tag','laser_power');
     set(h,'String',Value(end));
 
+    handles.pos_command_with_backlash(end + 1,1) = eval(get(handles.screw_pos_1, 'String'));
+    handles.pos_command_with_backlash(end,2) = eval(get(handles.screw_pos_2, 'String'));
+    handles.pos_command_with_backlash(end,3) = eval(get(handles.screw_pos_3, 'String'));
 
     % Read the desired number of data bytes
     data = fgets(handles.obj);
@@ -638,10 +655,10 @@ end
 if (close_handles)
     fclose(handles.obj);
 end
-make_snug(1, handles);
+%make_snug(1, handles);
+EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
 difference = max(position) - min(position);
-set(handles.backlash_1, 'String', difference);
-set(handles.backlash_1, 'Value', difference);
+set(handles.backlash_1, 'String', difference / EncoderScaling);
 
 
 
@@ -706,12 +723,10 @@ end
 if (close_handles)
     fclose(handles.obj);
 end
-make_snug(2, handles);
+%make_snug(2, handles);
+EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
 difference = max(position) - min(position);
-set(handles.backlash_2, 'String', difference);
-set(handles.backlash_2, 'Value', difference);
-
-
+set(handles.backlash_2, 'String', difference / EncoderScaling);
 
 
 function backlash_3_Callback(hObject, eventdata, handles)
@@ -769,7 +784,9 @@ if exist('handles'),
         fprintf(obj,'%s\n',['I',int2str(Motor),int2str(Pulselist(k))]);
         data = fgets(obj);
         dataarray = strsplit(data,char(9));
-        position(k) = eval(dataarray{Positionindex(Motor)});
+        if (length(dataarray) >= 12)
+            position(k) = eval(dataarray{Positionindex(Motor)});
+        end
     end
 end
 if (~active || close_handles)
@@ -778,10 +795,10 @@ end
 if (close_handles)
     fclose(handles.obj);
 end
-make_snug(3, handles);
+%make_snug(3, handles);
+EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
 difference = max(position) - min(position);
-set(handles.backlash_3, 'String', difference);
-set(handles.backlash_3, 'Value', difference);
+set(handles.backlash_3, 'String', difference / EncoderScaling);
 
 
 % --- Executes on button press in backlash_all.
@@ -822,6 +839,7 @@ if exist('handles'),
     k=1;
     % Do this until the motor does not move for 100 pulses, or a max of 1000
     % pulses
+    position = zeros(1,1000);
     while (k<1000), 
         fprintf(obj,'%s\n',['I',int2str(Motor),'1']);
         
@@ -833,9 +851,10 @@ if exist('handles'),
         if length(dataarray)>=12,
             position(k) = eval(dataarray{Positionindex(Motor)});
             %position(k) = eval(dataarray{Positionindex(10)});
+            %disp(position(k));
         end
         if k>100,
-            if sum(diff(position(k-100:k)))==0, break; end
+            if sum(diff(position(k-50:k)))==0, break; end
         end;
         k=k+1;
     end
@@ -853,7 +872,7 @@ if (active)
 end
 
 % --- Executes on button press in ok_button.
-function ok_button_Callback(hObject, eventdata, handles)
+function ok_button_Callback(~, ~, handles)
 % hObject    handle to ok_button (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
