@@ -22,7 +22,7 @@ function varargout = guiserial_v2(varargin)
 
 % Edit the above text to modify the response to help guiserial_v2
 
-% Last Modified by GUIDE v2.5 18-May-2016 11:41:19
+% Last Modified by GUIDE v2.5 23-May-2016 11:37:00
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -142,7 +142,7 @@ switch(v)
 case(1)
     % Reading from 'instr.txt'
     handles.position_setpoints = load('instr.txt');
-    handles.index = 1;
+    handles.index = 2;
     disp('Opening Arduino Connections: Starting timer object')
     %obj = serial('/dev/cu.usbmodem1451');
     %set(obj,'BaudRate',115200)
@@ -160,7 +160,14 @@ case(1)
       fopen(obj);
     end;
     
-    %%Start the laser connections and start retrieving data
+    %% Make the motos snug against the bolt
+    for i = 1:3
+        make_snug(i, handles);
+        % Make the equal to the snug_position **Moved inside make_snug**
+        %fprintf(handles.obj,'%s\n',['R', int2str(i)]);
+    end
+    
+    %% Start the laser connections and start retrieving data
     try
         disp('Opening laser connections');
         ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
@@ -192,7 +199,7 @@ case(1)
     guidata(hObject,handles);
     start(handles.timer);
 case(0)
-    %%Do all the arduino bookkeeping
+    %% Do all the arduino bookkeeping
     disp('Closing Arduino Connections')
     % Stop the timer
     stop(handles.timer);
@@ -232,6 +239,8 @@ case(0)
     delete(handles.timer);
     clear('handles.timer');
 end;
+
+% Save chnages made to handles
 guidata(hObject,handles);
 
 function timer_callback(obj,~,fighandle)
@@ -249,14 +258,28 @@ if (handles.index < nrows)
     % Look at the position_setpoints to see if motor instructions need to be
     % sent out (if true, then the motor needs to change position)
     if (handles.position_setpoints(handles.index, 1) == handles.timer.TasksExecuted * handles.timer.AveragePeriod)
-        % Write new positions to the motors TODO: make sure motors are being
-        % written to correctly
+        % Write new positions to the motors
         %disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
-        fprintf(handles.obj,'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
+        if (handles.position_setpoints(handles.index, 2) - handles.position_setpoints(handles.index - 1, 2) > 0)
+            fprintf(handles.obj,'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
+        else
+            fprintf(handles.obj,'%s\n',['P1', ...
+                   (int2str(handles.position_setpoints(handles.index, 2)) - get(handles.backlash_1,'String'))])
+        end
         pause(.015);
-        fprintf(handles.obj,'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
+        if (handles.position_setpoints(handles.index, 3) - handles.position_setpoints(handles.index - 1, 3) > 0)
+            fprintf(handles.obj,'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
+        else
+            fprintf(handles.obj,'%s\n',['P2', ...
+                   (int2str(handles.position_setpoints(handles.index, 3)) - get(handles.backlash_2,'String'))])
+        end
         pause(.015);
-        fprintf(handles.obj,'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
+        if (handles.position_setpoints(handles.index, 4) - handles.position_setpoints(handles.index - 1, 4) > 0)
+            fprintf(handles.obj,'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
+        else
+            fprintf(handles.obj,'%s\n',['P3', ...
+                   (int2str(handles.position_setpoints(handles.index, 4)) - get(handles.backlash_3,'String'))])
+        end
         pause(.015);
     end
 end
@@ -264,11 +287,11 @@ end
 % Read from the laser
 [Value, Timestamp, ~]= handles.ophir_app.GetData(handles.open_USB(1),0);
 
-%Check to see if the laser is read
+%Check to see if the laser value is valid
 if (~isempty(Value))
     
     %Request arduino data
-    fprintf(handles.obj,'%s\n','R');
+    fprintf(handles.obj,'%s\n','D');
 
     handles.time_stamp(1, end+1) = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
     handles.power_data(2,end+1) = Value(end); %Only log the last sample
@@ -283,7 +306,7 @@ if (~isempty(Value))
     handles.position_data{length(values)+1}=data;
 
     dataarray = strsplit(data,char(9));
-    if length(dataarray)>=12,
+    if length(dataarray)>=14,
         h=findobj(handles.guiserial,'Tag','Pos1Set');
         set(h,'String',dataarray{1});
         h=findobj(handles.guiserial,'Tag','Pos1');
@@ -308,6 +331,8 @@ if (~isempty(Value))
         set(h,'String',dataarray{11});
         h=findobj(handles.guiserial,'Tag','IntErr3');
         set(h,'String',dataarray{12});
+        h=findobj(handles.guiserial,'Tag','is_error');
+        set(h,'String',dataarray{14});
     end
 end
 disp('data read')
@@ -547,3 +572,292 @@ end
 
 
 delete(hObject);
+
+
+
+function backlash_1_Callback(hObject, eventdata, handles)
+% hObject    handle to backlash_1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of backlash_1 as text
+%        str2double(get(hObject,'String')) returns contents of backlash_1 as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function backlash_1_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to backlash_1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in backlash_calculate_1.
+function backlash_calculate_1_Callback(hObject, eventdata, handles)
+% hObject    handle to backlash_calculate_1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+disp('Calculating backlash for motor 1...')
+
+if exist('handles'),
+    active = false;
+    close_handles = false;
+    if (isfield(handles,'obj'))
+        active = true;
+        if(strcmp(get(handles.obj,'Status'),'open'))
+            obj=handles.obj;
+        else
+            close_handles = true;
+            fopen(handles.obj);
+            obj=handles.obj;
+        end
+    else
+        obj = serial('COM6', 'BaudRate', 115200);
+        fopen(obj);
+    end
+    pause(1)
+    Motor=1;
+    Pulselist=1*[-ones(200,1);ones(300,1);-ones(200,1);ones(300,1)];
+    position = zeros(1,length(Pulselist));
+    Positionindex=[2 6 10];
+    for k=1:length(Pulselist),
+        fprintf(obj,'%s\n',['I',int2str(Motor),int2str(Pulselist(k))]);
+        data = fgets(obj);
+        dataarray = strsplit(data,char(9));
+        position(k) = eval(dataarray{Positionindex(Motor)});
+    end
+end
+if (~active || close_handles)
+    fclose(obj);
+end
+if (close_handles)
+    fclose(handles.obj);
+end
+make_snug(1, handles);
+difference = max(position) - min(position);
+set(handles.backlash_1, 'String', difference);
+set(handles.backlash_1, 'Value', difference);
+
+
+
+function backlash_2_Callback(hObject, eventdata, handles)
+% hObject    handle to backlash_2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+
+% --- Executes during object creation, after setting all properties.
+function backlash_2_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to backlash_2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in backlash_calculate_2.
+function backlash_calculate_2_Callback(hObject, eventdata, handles)
+% hObject    handle to backlash_calculate_2 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+disp('Calculating backlash for motor 2...')
+
+if exist('handles'),
+    active = false;
+    close_handles = false;
+    if (isfield(handles,'obj'))
+        active = true;
+        if(strcmp(get(handles.obj,'Status'),'open'))
+            obj=handles.obj;
+        else
+            close_handles = true;
+            fopen(handles.obj);
+            obj=handles.obj;
+        end
+    else
+        obj = serial('COM6', 'BaudRate', 115200);
+        fopen(obj);
+    end
+    pause(1)
+    Motor=2;
+    Pulselist=1*[-ones(200,1);ones(300,1);-ones(200,1);ones(300,1)];
+    position = zeros(1,length(Pulselist));
+    Positionindex=[2 6 10];
+    for k=1:length(Pulselist),
+        fprintf(obj,'%s\n',['I',int2str(Motor),int2str(Pulselist(k))]);
+        data = fgets(obj);
+        dataarray = strsplit(data,char(9));
+        position(k) = eval(dataarray{Positionindex(Motor)});
+    end
+end
+if (~active || close_handles)
+    fclose(obj);
+end
+if (close_handles)
+    fclose(handles.obj);
+end
+make_snug(2, handles);
+difference = max(position) - min(position);
+set(handles.backlash_2, 'String', difference);
+set(handles.backlash_2, 'Value', difference);
+
+
+
+
+function backlash_3_Callback(hObject, eventdata, handles)
+% hObject    handle to backlash_3 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of backlash_3 as text
+%        str2double(get(hObject,'String')) returns contents of backlash_3 as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function backlash_3_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to backlash_3 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in backlash_calculate_3.
+function backlash_calculate_3_Callback(hObject, eventdata, handles)
+% hObject    handle to backlash_calculate_3 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+disp('Calculating backlash for motor 3...')
+
+if exist('handles'),
+    active = false;
+    close_handles = false;
+    if (isfield(handles,'obj'))
+        active = true;
+        if(strcmp(get(handles.obj,'Status'),'open'))
+            obj=handles.obj;
+        else
+            close_handles = true;
+            fopen(handles.obj);
+            obj=handles.obj;
+        end
+    else
+        obj = serial('COM6', 'BaudRate', 115200);
+        fopen(obj);
+    end
+    pause(1)
+    Motor=4;
+    Pulselist=1*[-ones(200,1);ones(300,1);-ones(200,1);ones(300,1)];
+    position = zeros(1,length(Pulselist));
+    Positionindex=[2 6 10];
+    for k=1:length(Pulselist),
+        fprintf(obj,'%s\n',['I',int2str(Motor),int2str(Pulselist(k))]);
+        data = fgets(obj);
+        dataarray = strsplit(data,char(9));
+        position(k) = eval(dataarray{Positionindex(Motor)});
+    end
+end
+if (~active || close_handles)
+    fclose(obj);
+end
+if (close_handles)
+    fclose(handles.obj);
+end
+make_snug(3, handles);
+difference = max(position) - min(position);
+set(handles.backlash_3, 'String', difference);
+set(handles.backlash_3, 'Value', difference);
+
+
+% --- Executes on button press in backlash_all.
+function backlash_all_Callback(hObject, eventdata, handles)
+% hObject    handle to backlash_all (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+value=eval(get(handles.backlash_1,'String'));
+set(handles.backlash_2, 'String', value);
+set(handles.backlash_3, 'String', value);
+
+function make_snug(Motor, handles)
+%
+% This code will direct the motor to send a series of very small pulses
+% These pulses are strong enough to move the hex tool, but not
+% strong enough to move the screw if it is engaged.
+
+disp(['Making motor ', int2str(Motor), ' snug']);
+active = false;
+close_handles = false;
+if exist('handles'),
+    if (isfield(handles,'obj'))
+        active = true;
+        if(strcmp(get(handles.obj,'Status'),'open'))
+            obj=handles.obj;
+        else
+            close_handles = true;
+            fopen(handles.obj);
+            obj=handles.obj;
+        end
+    else
+        obj = serial('COM6', 'BaudRate', 115200);
+        fopen(obj);
+    end
+    pause(1)
+    Positionindex=[2 6 10];
+    position=[];
+    k=1;
+    % Do this until the motor does not move for 100 pulses, or a max of 1000
+    % pulses
+    while (k<1000), 
+        fprintf(obj,'%s\n',['I',int2str(Motor),'1']);
+        
+        %Request arduino data
+        %fprintf(handles.obj,'%s\n','D');
+        
+        data = fgets(obj);
+        dataarray = strsplit(data,char(9));
+        if length(dataarray)>=12,
+            position(k) = eval(dataarray{Positionindex(Motor)});
+            %position(k) = eval(dataarray{Positionindex(10)});
+        end
+        if k>100,
+            if sum(diff(position(k-100:k)))==0, break; end
+        end;
+        k=k+1;
+    end
+end
+if (~active || close_handles)
+    fclose(obj);
+end
+if (close_handles)
+    fclose(handles.obj);
+end
+
+if (active)
+    % Make the equal to the snug_position
+    fprintf(handles.obj,'%s\n',['R', int2str(Motor)]);
+end
+
+% --- Executes on button press in ok_button.
+function ok_button_Callback(hObject, eventdata, handles)
+% hObject    handle to ok_button (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+fprintf(handles.obj,'%s\n','OK');
+pause(.15);
+

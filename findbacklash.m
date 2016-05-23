@@ -1,4 +1,5 @@
-obj = serial('/dev/cu.usbmodem1411','BaudRate', 115200);
+%obj = serial('/dev/cu.usbmodem1411','BaudRate', 115200);
+obj = serial('COM6', 'BaudRate', 115200);
 fopen(obj);
 pause(1)
 Motor=1;
@@ -11,6 +12,7 @@ for k=1:length(Pulselist),
   position(k) = eval(dataarray{Positionindex(Motor)});
 end;
 
-
 fclose(obj);
+difference = max(position) - min(position)
+
 plot(position)

@@ -266,9 +266,25 @@ void loop() {
             break;
         }
         break;
-      case 'R': // request data
+      case 'D': // request data
         data_request = true;
         break;
+      case 'R':
+        switch (inputString.charAt(1)) {
+            case '1':
+              _FirstEncoderTicks = 0;
+              break;
+            case '2':
+              _SecondEncoderTicks = 0;
+              break;
+            case '3':
+              _ThirdEncoderTicks = 0;
+              break;
+            default:
+              // nothing
+              break;
+        }
+      break;
       case 'I': // do a motor impulse
         tempstring = inputString.substring(2);
         pulse_time = tempstring.toInt();

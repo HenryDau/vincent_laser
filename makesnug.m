@@ -3,7 +3,8 @@
 % These pulses are strong enough to move the hex tool, but not
 % strong enough to move the screw if it is engaged.
 %
-obj = serial('/dev/cu.usbmodem1411','BaudRate', 115200);
+%obj = serial('/dev/cu.usbmodem1411','BaudRate', 115200);
+obj = serial('COM6', 'BaudRate', 115200);
 fopen(obj);
 pause(1)
 Motor=1; % Motor to make snug
