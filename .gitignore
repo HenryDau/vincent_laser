@@ -4,3 +4,6 @@ log*.*
 notes.*
 position_maker.*
 test_data.*
+findbacklash.m
+makesnug.m
+test*
