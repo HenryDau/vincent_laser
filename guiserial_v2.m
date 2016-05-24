@@ -22,7 +22,7 @@ function varargout = guiserial_v2(varargin)
 
 % Edit the above text to modify the response to help guiserial_v2
 
-% Last Modified by GUIDE v2.5 23-May-2016 11:37:00
+% Last Modified by GUIDE v2.5 24-May-2016 09:42:15
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -78,10 +78,8 @@ varargout{1} = handles.output;
 function Motor2Slider_Callback(hObject, ~, handles)
 
 Pos2=get(hObject,'Value');
-Time2=eval(get(handles.RampTime2,'String'));
 set(handles.PositionSetpoint2,'Value',Pos2);
 set(handles.PositionSetpoint2,'String',num2str(Pos2));
-%doRamp = get(handles.rampcheckbox2,'Value');
 if exist('handles'),
   if isfield(handles,'obj')
    obj=handles.obj;
@@ -106,10 +104,8 @@ end
 function Motor1Slider_Callback(hObject, ~, handles)
 
 Pos1=get(hObject,'Value');
-Time1=eval(get(handles.RampTime1,'String'));
 set(handles.PositionSetpoint1,'Value',Pos1);
 set(handles.PositionSetpoint1,'String',num2str(Pos1));
-%doRamp = get(handles.rampcheckbox1,'Value');
 if exist('handles'),
   if isfield(handles,'obj')
    obj=handles.obj;
@@ -130,31 +126,42 @@ if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColo
     set(hObject,'BackgroundColor',[.9 .9 .9]);
 end
 
-% --- Executes on button press in startbutton.
+% --- Executes on button press in startbutton_no_file.
 function startbutton_Callback(hObject, ~, handles)
-% hObject    handle to startbutton (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
 
-% Hint: get(hObject,'Value') returns toggle state of startbutton
+if (~isfield(handles, 'read_from_file'))
+    handles.read_from_file = true;
+end
+
 v=get(hObject,'Value');
 switch(v)
 case(1)
-    % Reading from 'instr.txt'
-    handles.position_setpoints = load('instr.txt');
+    % Ensure the button states always match
+    set(handles.startbutton_no_file, 'Value', 1);
+    
+    handles.position_setpoints = [];
+    if (handles.read_from_file)
+        % Reading from input file
+        handles.position_setpoints = load('test_data.txt');
+    end
     handles.index = 2;
     disp('Opening Arduino Connections: Starting timer object')
-    %obj = serial('/dev/cu.usbmodem1451');
-    %set(obj,'BaudRate',115200)
+
+    % Make sure there is no connection over the USB.
+    % (This should only execute if there was an error on the previous run)
+    if (~isempty(instrfind('Port','COM6')))
+        x=instrfind('Port','COM6');
+        fclose(x);
+        delete(x);
+    end
+    
     obj = serial('COM6', 'BaudRate', 115200 ,'Timeout',.015);
-    %obj.BytesAvailableFcn = {@timer_callback,handles.guiserial};
-    %obj.BytesAvailableFcnMode = 'terminator';
     t = timer('ExecutionMode', 'fixedRate', 'Period', .5);
     t.TimerFcn = { @timer_callback, handles.guiserial };
     handles.timer = t;
     obj.terminator = char(10);
     handles.obj = obj;
-    handles.position_data =[];
+    handles.position_data = [];
     handles.time_stamp = [];
     handles.pos_command_with_backlash = [];
     if(strcmp(get(obj,'status'),'closed')),
@@ -162,11 +169,9 @@ case(1)
     end;
     
     %% Make the motos snug against the bolt
-    for i = 1:3
-        make_snug(i, handles);
-        % Make the equal to the snug_position **Moved inside make_snug**
-        %fprintf(handles.obj,'%s\n',['R', int2str(i)]);
-    end
+    %for i = 1:3
+    %    make_snug(i, handles);
+    %end
     
     %% Start the laser connections and start retrieving data
     try
@@ -194,17 +199,26 @@ case(1)
     handles.ophir_app = ophirApp;
     handles.open_USB = h_USB;
     handles.power_data=[];
+    
+    % Make a new figure for graphing during operation
+    figure;
         
     % Start the timer (for some reason guidata must be updated here, 
     % probably because the timer starts before the code updates after the switch statement   
     guidata(hObject,handles);
     start(handles.timer);
 case(0)
+    
+    % Ensure the 'Start' button states match
+    set(handles.startbutton_no_file, 'Value', 0);
+    
     %% Do all the arduino bookkeeping
     disp('Closing Arduino Connections')
+    
     % Stop the timer
     stop(handles.timer);
     
+    % Close the arduino connection if it is active
     obj=handles.obj;
     if ~isempty(obj),
      if(strcmp(get(obj,'Status'),'open'))
@@ -212,8 +226,13 @@ case(0)
      end;
     end;
     
-    % Outputs the arduino (motor) data to a file
-    fileID = fopen('log.txt', 'w');
+    % Outputs the data to a new file of the name 'log_runX.txt' where x
+    % makes the file_name unique
+    counter = 1;
+    while (exist(['log_run', int2str(counter), '.txt']) == 2)
+        counter = counter + 1;
+    end
+    fileID = fopen(['log_run', int2str(counter), '.txt'], 'w');
     [~,nrows] = size(handles.position_data);
     for row = 1:nrows
         if (~isempty(handles.position_data{1,row}))
@@ -224,7 +243,7 @@ case(0)
         end
     end
     fclose(fileID);
-    disp('Output to file: log.txt');
+    disp(['Output to file: log_run', int2str(counter), '.txt']);
     
     %% Do all the laser bookeeping
     disp('Closing laser connections');
@@ -235,18 +254,45 @@ case(0)
         ophir_app.CloseAll;
         ophir_app.delete;
         clear ophir_app
-    end;
-    data_log = load('log.txt');
-    figure; plot(data_log(:, 1),data_log(:,2))
-
+    end
+    
+    %Plot the laser data (Commented because of active_plotting)
+    %data_log = load(['log_run', int2str(counter), '.txt']);
+    %if (~isempty(data_log))
+        %figure; plot(data_log(:, 1),data_log(:,2))
+    %end
+    
     %Delete the timer
     delete(handles.timer);
     clear('handles.timer');
-end;
+    
+    % Ensure this bool is default (for proper operation)
+    handles.read_from_file = true;
+end
 
-% Save chnages made to handles
+% Save changes made to handles
 guidata(hObject,handles);
 
+% --- Executes on button press in startbutton_no_file.
+function startbutton_no_file_Callback(hObject, ~, handles)
+% Ensure the state of the two start buttons is always the same
+v=get(hObject,'Value');
+switch(v)
+case(1)
+    set(handles.startbutton, 'Value', 1);
+case(0)
+    set(handles.startbutton, 'Value', 0);  
+end
+
+handles.read_from_file = false;
+% Update handles structure
+guidata(hObject, handles);
+
+%Call the main start button (which won't read from a filenow)
+startbutton_Callback(hObject, [], handles);
+
+
+%Executes every period (.5 by default) when either 'Start' button is pressed
 function timer_callback(obj,~,fighandle)
 handles=guidata(fighandle);
 
@@ -261,45 +307,43 @@ if (handles.index < nrows)
 
     % Look at the position_setpoints to see if motor instructions need to be
     % sent out (if true, then the motor needs to change position)
-    %    if (handles.position_setpoints(handles.index, 1) == handles.timer.TasksExecuted * handles.timer.AveragePeriod)
-        % Write new positions to the motors
-        %disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
 
-        EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
-        set(handles.screw_pos_1, 'String', handles.position_setpoints(handles.index, 2) * EncoderScaling);
-        if (handles.position_setpoints(handles.index, 2) - handles.position_setpoints(handles.index - 1, 2) >= 0)
-            fprintf(handles.obj,'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
-        else
-            fprintf(handles.obj,'%s\n',['P1', ...
-                   (int2str((handles.position_setpoints(handles.index, 2)) - eval(get(handles.backlash_1,'String'))))])
-        end
-        pause(.015);
+    % Write new positions to the motors
+    % disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
+    EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+    set(handles.screw_pos_1, 'String', handles.position_setpoints(handles.index, 2) * EncoderScaling);
+    if (handles.position_setpoints(handles.index, 2) - handles.position_setpoints(handles.index - 1, 2) >= 0)
+        fprintf(handles.obj,'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
+    else
+        fprintf(handles.obj,'%s\n',['P1', ...
+               (int2str((handles.position_setpoints(handles.index, 2)) - eval(get(handles.backlash_1,'String'))))])
+    end
+    pause(.015);
 
-        set(handles.screw_pos_2, 'String', handles.position_setpoints(handles.index, 3) * EncoderScaling);
-        if (handles.position_setpoints(handles.index, 3) - handles.position_setpoints(handles.index - 1, 3) >= 0)
-            fprintf(handles.obj,'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
-        else
-            fprintf(handles.obj,'%s\n',['P2', ...
-                   (int2str((handles.position_setpoints(handles.index, 3)) - eval(get(handles.backlash_2,'String'))))])
-        end
-        pause(.015);
+    set(handles.screw_pos_2, 'String', handles.position_setpoints(handles.index, 3) * EncoderScaling);
+    if (handles.position_setpoints(handles.index, 3) - handles.position_setpoints(handles.index - 1, 3) >= 0)
+        fprintf(handles.obj,'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
+    else
+        fprintf(handles.obj,'%s\n',['P2', ...
+               (int2str((handles.position_setpoints(handles.index, 3)) - eval(get(handles.backlash_2,'String'))))])
+    end
+    pause(.015);
 
-        set(handles.screw_pos_3, 'String', handles.position_setpoints(handles.index, 4) * EncoderScaling);
-        if (handles.position_setpoints(handles.index, 4) - handles.position_setpoints(handles.index - 1, 4) >= 0)
-            fprintf(handles.obj,'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
-        else
-            fprintf(handles.obj,'%s\n',['P3', ...
-                   (int2str((handles.position_setpoints(handles.index, 4)) - eval(get(handles.backlash_3,'String'))))])
-        end
-        pause(.015);
-
-   % end
+    set(handles.screw_pos_3, 'String', handles.position_setpoints(handles.index, 4) * EncoderScaling);
+    if (handles.position_setpoints(handles.index, 4) - handles.position_setpoints(handles.index - 1, 4) >= 0)
+        fprintf(handles.obj,'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
+    else
+        fprintf(handles.obj,'%s\n',['P3', ...
+               (int2str((handles.position_setpoints(handles.index, 4)) - eval(get(handles.backlash_3,'String'))))])
+    end
+    pause(.015);
 end
 
 % Read from the laser
 [Value, Timestamp, ~]= handles.ophir_app.GetData(handles.open_USB(1),0);
 
-%Check to see if the laser value is valid
+%Check to see if the laser value is valid (Ensure the number of data points
+%is consistent
 if (~isempty(Value))
     
     pause(.015);
@@ -310,8 +354,12 @@ if (~isempty(Value))
     handles.time_stamp(1, end+1) = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
     handles.power_data(2,end+1) = Value(end); %Only log the last sample
     handles.power_data(1,end) = Timestamp(end); %Only log the last timestamp
+    % Update the GUI laser_power object
     h=findobj(handles.guiserial,'Tag','laser_power');
     set(h,'String',Value(end));
+    
+    % Activly plot the power data (comment line to stop active graphing)
+    plot(handles.time_stamp(1, :),handles.power_data(2, :));
 
     handles.pos_command_with_backlash(end + 1,1) = eval(get(handles.screw_pos_1, 'String'));
     handles.pos_command_with_backlash(end,2) = eval(get(handles.screw_pos_2, 'String'));
@@ -367,31 +415,8 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 
-
-% --- Executes on button press in Motor2Ramp.
-function Motor2Ramp_Callback(hObject, eventdata, ~)
-
-
-function RampTime2_Callback(hObject, eventdata, handles)
-%%
-% Hints: get(hObject,'String') returns contents of RampTime2 as text
-%        str2double(get(hObject,'String')) returns contents of RampTime2 as a double
-
-
-% --- Executes during object creation, after setting all properties.
-function RampTime2_CreateFcn(hObject, eventdata, handles)
-%%
-
-if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor','white');
-end
-
-
 % --- Executes during object creation, after setting all properties.
 function guiserial_CreateFcn(~, ~, handles)
-% hObject    handle to guiserial_v2 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
 
 
 % --- Executes on button press in Set2.
@@ -416,53 +441,14 @@ function guiserial_ButtonDownFcn(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 
-% --- Executes on slider movement.
-function slider6_Callback(hObject, eventdata, handles)
-% hObject    handle to Motor1Slider (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'Value') returns position of slider
-%        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
-
-
-% --- Executes during object creation, after setting all properties.
-function slider6_CreateFcn(hObject, eventdata, ~)
-
-if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor',[.9 .9 .9]);
-end
-
 function PositionSetpoint1_Callback(hObject, ~, handles)
 %%
 % hObject    handle to PositionSetpoint1 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-
 % --- Executes during object creation, after setting all properties.
 function PositionSetpoint1_CreateFcn(hObject, ~, handles)
-%%
-if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor','white');
-end
-
-
-% --- Executes on button press in Motor1Ramp.
-function Motor1Ramp_Callback(hObject, ~, handles)
-
-% Hint: get(hObject,'Value') returns toggle state of Motor1Ramp
-
-
-
-function RampTime1_Callback(hObject, eventdata, handles)
-
-% Hints: get(hObject,'String') returns contents of RampTime1 as text
-%        str2double(get(hObject,'String')) returns contents of RampTime1 as a double
-
-
-% --- Executes during object creation, after setting all properties.
-function RampTime1_CreateFcn(hObject, eventdata, ~)
 %%
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
@@ -484,10 +470,8 @@ Motor1Slider_Callback(handles.Motor1Slider, eventdata, guidata(hObject)) % run c
 function Motor3Slider_Callback(hObject, ~, handles)
 
 Pos3=get(hObject,'Value');
-Time3=eval(get(handles.RampTime3,'String'));
 set(handles.PositionSetpoint3,'Value',Pos3);
 set(handles.PositionSetpoint3,'String',num2str(Pos3));
-%doRamp = get(handles.rampcheckbox1,'Value');
 if exist('handles'),
   if isfield(handles,'obj')
    obj=handles.obj;
@@ -522,32 +506,6 @@ function PositionSetpoint3_CreateFcn(hObject, ~, handles)
 
 % Hint: edit controls usually have a white background on Windows.
 %       See ISPC and COMPUTER.
-if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor','white');
-end
-
-
-% --- Executes on button press in Motor3Ramp.
-function Motor3Ramp_Callback(~, eventdata, ~)
-% hObject    handle to Motor3Ramp (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hint: get(hObject,'Value') returns toggle state of Motor3Ramp
-
-
-
-function RampTime3_Callback(hObject, ~, handles)
-% hObject    handle to RampTime3 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of RampTime3 as text
-%        str2double(get(hObject,'String')) returns contents of RampTime3 as a double
-
-
-% --- Executes during object creation, after setting all properties.
-function RampTime3_CreateFcn(hObject, ~, ~)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
@@ -589,7 +547,6 @@ end
 
 
 delete(hObject);
-
 
 
 function backlash_1_Callback(hObject, eventdata, handles)
@@ -835,23 +792,19 @@ if exist('handles'),
     end
     pause(1)
     Positionindex=[2 6 10];
-    position=[];
-    k=1;
-    % Do this until the motor does not move for 100 pulses, or a max of 1000
-    % pulses
     position = zeros(1,1000);
+    k=1;
+    
+    % Do this until the motor does not move for 50 pulses, or a max of 1000
+    % pulses
     while (k<1000), 
         fprintf(obj,'%s\n',['I',int2str(Motor),'1']);
-        
-        %Request arduino data
-        %fprintf(handles.obj,'%s\n','D');
         
         data = fgets(obj);
         dataarray = strsplit(data,char(9));
         if length(dataarray)>=12,
             position(k) = eval(dataarray{Positionindex(Motor)});
-            %position(k) = eval(dataarray{Positionindex(10)});
-            %disp(position(k));
+            %disp(position(k)); %Uncomment to see if motors are moving
         end
         if k>100,
             if sum(diff(position(k-50:k)))==0, break; end
@@ -859,6 +812,12 @@ if exist('handles'),
         k=k+1;
     end
 end
+
+if (active)
+    % Make the setpoint equal to the snug_position
+    fprintf(handles.obj,'%s\n',['R', int2str(Motor)]);
+end
+
 if (~active || close_handles)
     fclose(obj);
 end
@@ -866,17 +825,15 @@ if (close_handles)
     fclose(handles.obj);
 end
 
-if (active)
-    % Make the equal to the snug_position
-    fprintf(handles.obj,'%s\n',['R', int2str(Motor)]);
+
+% --- Executes on button press in snug.
+function snug_Callback(hObject, eventdata, handles)
+% Make the motos snug against the bolt
+for i = 1:3
+    make_snug(i, handles);
 end
 
-% --- Executes on button press in ok_button.
-function ok_button_Callback(~, ~, handles)
-% hObject    handle to ok_button (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
+disp('Done making motors snug');
 
-fprintf(handles.obj,'%s\n','OK');
-pause(.15);
-
+% Save the data (probably unneeded)
+guidata(hObject,handles);

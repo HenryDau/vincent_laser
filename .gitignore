@@ -1,6 +1,6 @@
 close_serial.m
-log.txt
-readme.*
-README.*
+log*.*
 *.asv
 notes.*
+position_maker.*
+test_data.*
