@@ -22,7 +22,7 @@ const int PWMC = 6;
 const float P = 1000;
 const float Pd = 50;
 const float PInt = 2000;
-const float umax = 150;
+const float umax = 250;
 
 // Switches
 //#define DECREASE 16
@@ -375,7 +375,7 @@ void loop() {
     if (abs(u1) > umax) {
       u1 = umax * sgn(u1);
       if (P > 0) {
-        err1 = max(u1 / P, err1);
+        err1 = min(u1 / P, err1);
       }
       if (PInt > 0) {
         err1int = ((float)u1 - P * err1 - Pd * xvel1) / PInt;
@@ -403,7 +403,7 @@ void loop() {
     if (abs(u2) > umax) {
       u2 = umax * sgn(u2);
       if (P > 0) {
-        err2 = max(u2 / P, err2);
+        err2 = min(u2 / P, err2);
       }
       if (PInt > 0) {
         err2int = ((float)u2 - P * err2 - Pd * xvel2) / PInt;
@@ -431,7 +431,7 @@ void loop() {
     if (abs(u3) > umax) {
       u3 = umax * sgn(u3);
       if (P > 0) {
-        err3 = max(u3 / P, err3);
+        err3 = min(u3 / P, err3);
       }
       if (PInt > 0) {
         err3int = ((float)u3 - P * err3 - Pd * xvel3) / PInt;

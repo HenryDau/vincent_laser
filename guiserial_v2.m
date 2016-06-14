@@ -259,7 +259,7 @@ case(0)
     %Plot the laser data (Commented because of active_plotting)
     %data_log = load(['log_run', int2str(counter), '.txt']);
     %if (~isempty(data_log))
-        %figure; plot(data_log(:, 1),data_log(:,2))
+    %    figure; plot(data_log(:, 1),data_log(:,2))
     %end
     
     %Delete the timer

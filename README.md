@@ -27,38 +27,38 @@ period of 0.5 seconds.
 ###Motor_Controller_v3
 
 ###instr.txt
-The file read from to move the motors automatically. Requires 4 columns:
+The file read from to move the motors automatically. Requires 4 columns:  
 
-time_stamp - The time which the motors should move to the set point
-motor_1_setpoint - The setpoint (in degrees) of the motor 
-motor_2_setpoint - The setpoint (in degrees) of the motor 
-motor_3_setpoint - The setpoint (in degrees) of the motor 
+time_stamp - The time which the motors should move to the set point  
+motor_1_setpoint - The setpoint (in degrees) of the motor   
+motor_2_setpoint - The setpoint (in degrees) of the motor   
+motor_3_setpoint - The setpoint (in degrees) of the motor   
 
 Note that the time stamps must be in sequental order.
 
 ###log_runX.txt
 This file is not included in the repository, but is created by default at
-the end of every data collection run. The file contains 19 columns as follows:
+the end of every data collection run. The file contains 19 columns as follows:  
 
-time_stamp - The time during the programs execution that the data was taken
-laser_power - The Watts of the laser at this point in time
-motor_1_pos_without_backlash - Motor 1's setpoint without the backlash calculation
-motor_2_pos_without_backlash - Motor 2's setpoint without the backlash calculation
-motor_3_pos_without_backlash - Motor 3's setpoint without the backlash calculation
-motor_1_setpoint - Motor 1's setpoint with the backlash calculation
-motor_1_position - Motor 1's position
-motor_1_command - The PWM command sent to motor 1 (ranges from 0-255)
-motor_1_err - The error between the motor setpoint and position (used to calc command)
-motor_2_setpoint - Motor 2's setpoint with the backlash calculation
-motor_2_position - Motor 2's position
-motor_2_command - The PWM command sent to motor 2 (ranges from 0-255)
-motor_2_err - The error between the motor setpoint and position (used to calc command)
-motor_3_setpoint - Motor 3's setpoint with the backlash calculation
-motor_3_position - Motor 3's position
-motor_3_command - The PWM command sent to motor 3 (ranges from 0-255)
-motor_3_err - The error between the motor setpoint and position (used to calc command)
-execution_time - The time it took for the arduino program to execute (in microseconds)
-                 NOTE* - The arduino program runs every 10 milliseconds
-Error - Debugging boolean indicating wheather the encoders have moved an impossible
-        amount. Can be ignored when plotting the data.
+time_stamp - The time during the programs execution that the data was taken  
+laser_power - The Watts of the laser at this point in time  
+motor_1_pos_without_backlash - Motor 1's setpoint without the backlash calculation  
+motor_2_pos_without_backlash - Motor 2's setpoint without the backlash calculation  
+motor_3_pos_without_backlash - Motor 3's setpoint without the backlash calculation  
+motor_1_setpoint - Motor 1's setpoint with the backlash calculation  
+motor_1_position - Motor 1's position  
+motor_1_command - The PWM command sent to motor 1 (ranges from 0-255)  
+motor_1_err - The error between the motor setpoint and position (used to calc command)  
+motor_2_setpoint - Motor 2's setpoint with the backlash calculation  
+motor_2_position - Motor 2's position  
+motor_2_command - The PWM command sent to motor 2 (ranges from 0-255)  
+motor_2_err - The error between the motor setpoint and position (used to calc command)  
+motor_3_setpoint - Motor 3's setpoint with the backlash calculation  
+motor_3_position - Motor 3's position  
+motor_3_command - The PWM command sent to motor 3 (ranges from 0-255)  
+motor_3_err - The error between the motor setpoint and position (used to calc command)  
+execution_time - The time it took for the arduino program to execute (in microseconds)  
+                 NOTE* - The arduino program runs every 10 milliseconds  
+Error - Debugging boolean indicating wheather the encoders have moved an impossible  
+        amount. Can be ignored when plotting the data.  
 
