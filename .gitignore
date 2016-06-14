@@ -1,0 +1,9 @@
+close_serial.m
+log*.*
+*.asv
+notes.*
+position_maker.*
+test_data.*
+findbacklash.m
+makesnug.m
+test*
