@@ -1,3 +1,8 @@
+%{
+Notes:
+Change slider and Get Data both need 1,2 manually changed right now. Easily
+chagned.
+%}
 function varargout = guiserial_v2(varargin)
 % GUISERIAL_V2 MATLAB code for guiserial_v2.fig
 %      GUISERIAL_V2, by itself, creates a new GUISERIAL_V2 or raises the existing
@@ -22,7 +27,7 @@ function varargout = guiserial_v2(varargin)
 
 % Edit the above text to modify the response to help guiserial_v2
 
-% Last Modified by GUIDE v2.5 24-May-2016 09:42:15
+% Last Modified by GUIDE v2.5 03-Oct-2016 15:30:35
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -60,6 +65,9 @@ handles.COMS = {'COM6', 'COM7'};
 set(handles.Motor1Slider,'SliderStep',[1/1440 10/1440])
 set(handles.Motor2Slider,'SliderStep',[1/1440 10/1440])
 set(handles.Motor3Slider,'SliderStep',[1/1440 10/1440])
+set(handles.Motor1Slider_2,'SliderStep',[1/1440 10/1440])
+set(handles.Motor2Slider_2,'SliderStep',[1/1440 10/1440])
+set(handles.Motor3Slider_2,'SliderStep',[1/1440 10/1440])
 
 % Update handles structure
 guidata(hObject, handles);
@@ -74,14 +82,6 @@ function varargout = guiserial_v2_OutputFcn(~, ~, handles)
 % Get default command line output from handles structure
 varargout{1} = handles.output;
 
-
-%% --- Executes on slider movement.
-function Motor2Slider_Callback(hObject, ~, handles)
-Pos=get(hObject,'Value');
-set(handles.PositionSetpoint2,'Value',Pos);
-set(handles.PositionSetpoint2,'String',num2str(Pos));
-change_slider(handles, 1, Pos, 2)
-
 %% The function that changes a slider
 function change_slider(handles, index, pos, motor)
 if exist('handles'),
@@ -91,27 +91,6 @@ if exist('handles'),
          fprintf(obj,'%s\n',['P', int2str(motor) ,int2str(pos)])
       end
   end
-end
-
-%% --- Executes during object creation, after setting all properties.
-function Motor2Slider_CreateFcn(hObject, ~, handles)
-
-if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor',[.9 .9 .9]);
-end
-
-%% --- Executes on slider movement.
-function Motor1Slider_Callback(hObject, ~, handles)
-Pos=get(hObject,'Value');
-set(handles.PositionSetpoint1,'Value',Pos);
-set(handles.PositionSetpoint1,'String',num2str(Pos));
-change_slider(handles, 1, Pos, 1)
-
-%% --- Executes during object creation, after setting all properties.
-function Motor1Slider_CreateFcn(hObject, ~, ~)
-
-if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor',[.9 .9 .9]);
 end
 
 %% --- Executes on button press in startbutton.
@@ -156,13 +135,15 @@ case(1)
     end
     
     % Make a timer that executes every .5 seconds
+    % TODO: tinker with period to stop GUI gettign overwritten by active
+    % plotting
     t = timer('ExecutionMode', 'fixedRate', 'Period', .5);
     t.TimerFcn = { @timer_callback, handles.guiserial };
     handles.timer = t;
     
     % Data for each run
-    handles.position_data = [];
     handles.time_stamp = [];
+    handles.position_data = [];
     handles.pos_command_with_backlash = [];
     
     %% Make the motos snug against the bolt
@@ -286,6 +267,7 @@ case(0)
 end
 
 handles.read_from_file = false;
+
 % Update handles structure
 guidata(hObject, handles);
 
@@ -299,10 +281,11 @@ function timer_callback(obj,~,fighandle)
 %for i = 1:length(handles.objs)
 %    get_data(obj, fighandle, 1);
 %end
-get_data(obj, fighandle, 1)
+get_data(fighandle, 1)
+get_data(fighandle, 2)
 
 %% Works with the timer_callback function
-function get_data(obj, fighandle, port_index)
+function get_data(fighandle, port_index)
 handles=guidata(fighandle);
 
 [nrows, ~] = size(handles.position_setpoints);
@@ -321,33 +304,74 @@ if (handles.index < nrows)
     % disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
     EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
     
-    % Write to motor 1
+    %% Position stuff for assembly 1
+    
+    % Write to motor 1 assembly 1
     set(handles.screw_pos_1, 'String', handles.position_setpoints(handles.index, 2) * EncoderScaling);    
     if (handles.position_setpoints(handles.index, 2) - handles.position_setpoints(handles.index - 1, 2) >= 0)
-        fprintf(handles.objs(port_index),'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
+        fprintf(handles.objs(1),'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
     else
-        fprintf(handles.objs(port_index),'%s\n',['P1', ...
+        fprintf(handles.objs(1),'%s\n',['P1', ...
                (int2str((handles.position_setpoints(handles.index, 2)) - eval(get(handles.backlash_1,'String'))))])
     end
     pause(.015);
 
-    % Write to motor 2
+    % Write to motor 2 assembly 1
     set(handles.screw_pos_2, 'String', handles.position_setpoints(handles.index, 3) * EncoderScaling);
     if (handles.position_setpoints(handles.index, 3) - handles.position_setpoints(handles.index - 1, 3) >= 0)
-        fprintf(handles.objs(port_index),'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
+        % Write motor 2 to the position specified in position setpoints
+        % without backlash
+        fprintf(handles.objs(1),'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
     else
-        fprintf(handles.objs(port_index),'%s\n',['P2', ...
+        % Write motor 2 to the position specified in position setpoints
+        % with backlash
+        fprintf(handles.objs(1),'%s\n',['P2', ...
                (int2str((handles.position_setpoints(handles.index, 3)) - eval(get(handles.backlash_2,'String'))))])
     end
     pause(.015);
 
-    % Write to motor 3
+    % Write to motor 3 assembly 1
     set(handles.screw_pos_3, 'String', handles.position_setpoints(handles.index, 4) * EncoderScaling);
     if (handles.position_setpoints(handles.index, 4) - handles.position_setpoints(handles.index - 1, 4) >= 0)
-        fprintf(handles.objs(port_index),'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
+        fprintf(handles.objs(1),'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
     else
-        fprintf(handles.objs(port_index),'%s\n',['P3', ...
+        fprintf(handles.objs(1),'%s\n',['P3', ...
                (int2str((handles.position_setpoints(handles.index, 4)) - eval(get(handles.backlash_3,'String'))))])
+    end
+    pause(.015);
+    
+    %% Position stuff for assembly 2
+    % Write to motor 1 assembly 2
+    set(handles.screw_pos_1_2, 'String', handles.position_setpoints(handles.index, 5) * EncoderScaling);    
+    if (handles.position_setpoints(handles.index, 5) - handles.position_setpoints(handles.index - 1, 5) >= 0)
+        fprintf(handles.objs(2),'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 5))])
+    else
+        fprintf(handles.objs(2),'%s\n',['P1', ...
+               (int2str((handles.position_setpoints(handles.index, 5)) - eval(get(handles.backlash_1_2,'String'))))])
+    end
+    pause(.015);
+
+    % Write to motor 2 assembly 2
+    set(handles.screw_pos_2_2, 'String', handles.position_setpoints(handles.index, 6) * EncoderScaling);
+    if (handles.position_setpoints(handles.index, 6) - handles.position_setpoints(handles.index - 1, 6) >= 0)
+        % Write motor 2 to the position specified in position setpoints
+        % without backlash
+        fprintf(handles.objs(2),'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 6))])
+    else
+        % Write motor 2 to the position specified in position setpoints
+        % with backlash
+        fprintf(handles.objs(2),'%s\n',['P2', ...
+               (int2str((handles.position_setpoints(handles.index, 6)) - eval(get(handles.backlash_2_2,'String'))))])
+    end
+    pause(.015);
+
+    % Write to motor 3 assembly 2
+    set(handles.screw_pos_3_2, 'String', handles.position_setpoints(handles.index, 7) * EncoderScaling);
+    if (handles.position_setpoints(handles.index, 7) - handles.position_setpoints(handles.index - 1, 7) >= 0)
+        fprintf(handles.objs(2),'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 7))])
+    else
+        fprintf(handles.objs(2),'%s\n',['P3', ...
+               (int2str((handles.position_setpoints(handles.index, 7)) - eval(get(handles.backlash_3_2,'String'))))])
     end
     pause(.015);
 end
@@ -361,7 +385,8 @@ if (~isempty(Value))
     pause(.015);
     
     %Request arduino data
-    fprintf(handles.objs(port_index),'%s\n','D');
+    fprintf(handles.objs(1),'%s\n','D');
+    fprintf(handles.objs(2),'%s\n','D');
     pause(.015);
 
     % Save the gathered data
@@ -380,12 +405,17 @@ if (~isempty(Value))
     handles.pos_command_with_backlash(end + 1,1) = eval(get(handles.screw_pos_1, 'String'));
     handles.pos_command_with_backlash(end,2) = eval(get(handles.screw_pos_2, 'String'));
     handles.pos_command_with_backlash(end,3) = eval(get(handles.screw_pos_3, 'String'));
-
+    handles.pos_command_with_backlash(end,4) = eval(get(handles.screw_pos_1_2, 'String'));
+    handles.pos_command_with_backlash(end,5) = eval(get(handles.screw_pos_2_2, 'String'));
+    handles.pos_command_with_backlash(end,6) = eval(get(handles.screw_pos_3_2, 'String'));
+    
     % Read the desired number of data bytes
-    data = fgets(handles.objs(port_index));
+    data = fgets(handles.objs(1));
+    data_2 = fgets(handles.objs(2));
     values=handles.position_data;
-    handles.position_data{length(values)+1}=data;
+    handles.position_data{length(values)+1}=[data, data_2];
 
+    % Assembly 1
     dataarray = strsplit(data,char(9));
     if length(dataarray)>=14,
         h=findobj(handles.guiserial,'Tag','Pos1Set');
@@ -415,9 +445,68 @@ if (~isempty(Value))
         h=findobj(handles.guiserial,'Tag','is_error');
         set(h,'String',dataarray{14});
     end
+    
+    % Assembly 2
+    dataarray = strsplit(data_2,char(9));
+    if length(dataarray)>=14,
+        h=findobj(handles.guiserial,'Tag','Pos1Set_2');
+        set(h,'String',dataarray{1});
+        h=findobj(handles.guiserial,'Tag','Pos1_2');
+        set(h,'String',dataarray{2});
+        h=findobj(handles.guiserial,'Tag','MotorCommand1_2');
+        set(h,'String',dataarray{3});
+        h=findobj(handles.guiserial,'Tag','IntErr1_2');
+        set(h,'String',dataarray{4});
+        h=findobj(handles.guiserial,'Tag','Pos2Set_2');
+        set(h,'String',dataarray{5});
+        h=findobj(handles.guiserial,'Tag','Pos2_2');
+        set(h,'String',dataarray{6});
+        h=findobj(handles.guiserial,'Tag','MotorCommand2_2');
+        set(h,'String',dataarray{7});
+        h=findobj(handles.guiserial,'Tag','IntErr2_2');
+        set(h,'String',dataarray{8});
+        h=findobj(handles.guiserial,'Tag','Pos3Set_2');
+        set(h,'String',dataarray{9});
+        h=findobj(handles.guiserial,'Tag','Pos3_2');
+        set(h,'String',dataarray{10});
+        h=findobj(handles.guiserial,'Tag','MotorCommand3_2');
+        set(h,'String',dataarray{11});
+        h=findobj(handles.guiserial,'Tag','IntErr3_2');
+        set(h,'String',dataarray{12});
+    end
 end
+
 disp('data read')
 guidata(fighandle,handles);
+
+
+%% --- Executes on slider movement.
+function Motor1Slider_Callback(hObject, ~, handles)
+Pos=get(hObject,'Value');
+set(handles.PositionSetpoint1,'Value',Pos);
+set(handles.PositionSetpoint1,'String',num2str(Pos));
+change_slider(handles, 1, Pos, 1)
+
+%% --- Executes during object creation, after setting all properties.
+function Motor1Slider_CreateFcn(hObject, ~, ~)
+
+if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor',[.9 .9 .9]);
+end
+
+%% --- Executes on slider movement.
+function Motor2Slider_Callback(hObject, ~, handles)
+Pos=get(hObject,'Value');
+set(handles.PositionSetpoint2,'Value',Pos);
+set(handles.PositionSetpoint2,'String',num2str(Pos));
+change_slider(handles, 1, Pos, 2)
+
+%% --- Executes during object creation, after setting all properties.
+function Motor2Slider_CreateFcn(hObject, ~, handles)
+
+if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor',[.9 .9 .9]);
+end
 
 %% Useless but necessary
 function PositionSetpoint2_Callback(hObject, eventdata, handles)
@@ -438,8 +527,6 @@ function guiserial_CreateFcn(~, ~, handles)
 
 %% --- Executes on button press in Set2.
 function Set2_Callback(hObject, eventdata, handles)
-%%
-
 Pos2=eval(get(handles.PositionSetpoint2,'String'));
 minset=get(handles.Motor2Slider,'Min');
 maxset=get(handles.Motor2Slider,'Max');
@@ -497,8 +584,6 @@ if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColo
     set(hObject,'BackgroundColor',[.9 .9 .9]);
 end
 
-
-
 function PositionSetpoint3_Callback(~, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of PositionSetpoint3 as text
@@ -513,7 +598,6 @@ function PositionSetpoint3_CreateFcn(hObject, ~, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
-
 
 %% --- Executes on button press in Set3.
 function Set3_Callback(hObject, eventdata, handles)
@@ -558,22 +642,9 @@ delete(hObject);
 
 
 function backlash_1_Callback(hObject, eventdata, handles)
-% hObject    handle to backlash_1 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of backlash_1 as text
-%        str2double(get(hObject,'String')) returns contents of backlash_1 as a double
-
 
 %% --- Executes during object creation, after setting all properties.
 function backlash_1_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to backlash_1 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
@@ -581,30 +652,18 @@ end
 
 %% --- Executes on button press in backlash_calculate_1.
 function backlash_calculate_1_Callback(hObject, eventdata, handles)
-% hObject    handle to backlash_calculate_1 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
 disp('Calculating backlash for motor 1...')
-difference = find_backlash(1, handles);
 EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+difference = find_backlash(1, handles, 1);
 set(handles.backlash_1, 'String', difference / EncoderScaling);
-
+difference = find_backlash(1, handles, 2);
+set(handles.backlash_1_2, 'String', difference / EncoderScaling);
 
 
 function backlash_2_Callback(hObject, eventdata, handles)
-% hObject    handle to backlash_2 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
 
 %% --- Executes during object creation, after setting all properties.
 function backlash_2_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to backlash_2 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
@@ -612,33 +671,18 @@ end
 
 %% --- Executes on button press in backlash_calculate_2.
 function backlash_calculate_2_Callback(hObject, eventdata, handles)
-% hObject    handle to backlash_calculate_2 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
 disp('Calculating backlash for motor 2...')
-difference = find_backlash(2, handles);
 EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+difference = find_backlash(2, handles, 1);
 set(handles.backlash_2, 'String', difference / EncoderScaling);
+difference = find_backlash(2, handles, 2);
+set(handles.backlash_2_2, 'String', difference / EncoderScaling);
 
 
 function backlash_3_Callback(hObject, eventdata, handles)
-% hObject    handle to backlash_3 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of backlash_3 as text
-%        str2double(get(hObject,'String')) returns contents of backlash_3 as a double
-
 
 %% --- Executes during object creation, after setting all properties.
 function backlash_3_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to backlash_3 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
@@ -651,23 +695,25 @@ function backlash_calculate_3_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 disp('Calculating backlash for motor 3...')
-difference = find_backlash(3, handles);
 EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+difference = find_backlash(3, handles, 1);
 set(handles.backlash_3, 'String', difference / EncoderScaling);
+difference = find_backlash(3, handles, 2);
+set(handles.backlash_3_2, 'String', difference / EncoderScaling);
 
 
 %% --- Executes on button press in backlash_all.
 function backlash_all_Callback(hObject, eventdata, handles)
-% hObject    handle to backlash_all (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
 value=eval(get(handles.backlash_1,'String'));
 set(handles.backlash_2, 'String', value);
 set(handles.backlash_3, 'String', value);
+value=eval(get(handles.backlash_1_2,'String'));
+set(handles.backlash_2_2, 'String', value);
+set(handles.backlash_3_2, 'String', value);
 
 %% Finds the amount of play between the allen key and the bolt.
 function [difference] = find_backlash(Motor, handles, index)
-
+obj = [];
 if exist('handles'),
     active = false;
     close_handles = false;
@@ -705,9 +751,8 @@ if (~active || close_handles)
     fclose(obj);
 end
 if (close_handles)
-    fclose(handles.obj);
+    fclose(handles.objs(index));
 end
-%make_snug(3, handles);
 difference = max(position) - min(position);
 
 %% Make the motos tight aginst the alen bolt
@@ -717,7 +762,7 @@ function make_snug(Motor, handles, index)
 % These pulses are strong enough to move the hex tool, but not
 % strong enough to move the screw if it is engaged.
 
-disp(['Making motor ', int2str(Motor), ' snug']);
+disp(['Making motor ', int2str(Motor),' on assembly ', int2str(index), ' snug']);
 active = false;
 close_handles = false;
 if exist('handles'),
@@ -779,9 +824,138 @@ function snug_Callback(hObject, eventdata, handles)
 % Make the motos snug against the bolt
 for i = 1:3
     make_snug(i, handles, 1);
+    make_snug(i, handles, 2);
 end
 
 disp('Done making motors snug');
 
 % Save the data (probably unneeded)
 guidata(hObject,handles);
+
+
+% --- Executes on slider movement.
+function Motor2Slider_2_Callback(hObject, eventdata, handles)
+Pos=get(hObject,'Value');
+set(handles.PositionSetpoint2_2,'Value',Pos);
+set(handles.PositionSetpoint2_2,'String',num2str(Pos));
+change_slider(handles, 2, Pos, 2)
+
+
+% --- Executes during object creation, after setting all properties.
+function Motor2Slider_2_CreateFcn(hObject, eventdata, handles)
+% Hint: slider controls usually have a light gray background.
+if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor',[.9 .9 .9]);
+end
+
+function PositionSetpoint2_2_Callback(hObject, eventdata, handles)
+
+% --- Executes during object creation, after setting all properties.
+function PositionSetpoint2_2_CreateFcn(hObject, eventdata, handles)
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+% --- Executes on button press in Set2_2.
+function Set2_2_Callback(hObject, eventdata, handles)
+Pos2=eval(get(handles.PositionSetpoint2_2,'String'));
+minset=get(handles.Motor2Slider_2,'Min');
+maxset=get(handles.Motor2Slider_2,'Max');
+set(handles.Motor2Slider_2,'Value',min(max(Pos2,minset),maxset));
+% Hint: get(hObject,'Value') returns toggle state of Set2
+
+% initiate callback of slider
+Motor2Slider_2_Callback(handles.Motor2Slider_2, eventdata, guidata(hObject)) % run callback
+
+
+% --- Executes on slider movement.
+function Motor1Slider_2_Callback(hObject, eventdata, handles)
+Pos=get(hObject,'Value');
+set(handles.PositionSetpoint1_2,'Value',Pos);
+set(handles.PositionSetpoint1_2,'String',num2str(Pos));
+change_slider(handles, 2, Pos, 1)
+
+% --- Executes during object creation, after setting all properties.
+function Motor1Slider_2_CreateFcn(hObject, eventdata, handles)
+if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor',[.9 .9 .9]);
+end
+
+function PositionSetpoint1_2_Callback(hObject, eventdata, handles)
+
+% --- Executes during object creation, after setting all properties.
+function PositionSetpoint1_2_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+% --- Executes on button press in Set1_2.
+function Set1_2_Callback(hObject, eventdata, handles)
+Pos2=eval(get(handles.PositionSetpoint1_2,'String'));
+minset=get(handles.Motor1Slider_2,'Min');
+maxset=get(handles.Motor1Slider_2,'Max');
+set(handles.Motor1Slider_2,'Value',min(max(Pos2,minset),maxset));
+% Hint: get(hObject,'Value') returns toggle state of Set2
+
+% initiate callback of slider
+Motor1Slider_2_Callback(handles.Motor1Slider_2, eventdata, guidata(hObject)) % run callback
+
+
+% --- Executes on slider movement.
+function Motor3Slider_2_Callback(hObject, eventdata, handles)
+Pos=get(hObject,'Value');
+set(handles.PositionSetpoint3_2,'Value',Pos);
+set(handles.PositionSetpoint3_2,'String',num2str(Pos));
+change_slider(handles, 2, Pos, 3)
+
+
+% --- Executes during object creation, after setting all properties.
+function Motor3Slider_2_CreateFcn(hObject, eventdata, handles)
+if isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor',[.9 .9 .9]);
+end
+
+function PositionSetpoint3_2_Callback(hObject, eventdata, handles)
+
+% --- Executes during object creation, after setting all properties.
+function PositionSetpoint3_2_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+% --- Executes on button press in Set3_2.
+function Set3_2_Callback(hObject, eventdata, handles)
+Pos2=eval(get(handles.PositionSetpoint3_2,'String'));
+minset=get(handles.Motor3Slider_2,'Min');
+maxset=get(handles.Motor3Slider_2,'Max');
+set(handles.Motor3Slider_2,'Value',min(max(Pos2,minset),maxset));
+% Hint: get(hObject,'Value') returns toggle state of Set2
+
+% initiate callback of slider
+Motor3Slider_2_Callback(handles.Motor3Slider_2, eventdata, guidata(hObject)) % run callback
+
+function backlash_1_2_Callback(hObject, eventdata, handles)
+
+% --- Executes during object creation, after setting all properties.
+function backlash_1_2_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function backlash_2_2_Callback(hObject, eventdata, handles)
+
+% --- Executes during object creation, after setting all properties.
+function backlash_2_2_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function backlash_3_2_Callback(hObject, eventdata, handles)
+
+% --- Executes during object creation, after setting all properties.
+function backlash_3_2_CreateFcn(hObject, eventdata, handles)
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
