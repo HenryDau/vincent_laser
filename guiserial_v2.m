@@ -287,37 +287,15 @@ function timer_callback(~,~,fighandle)
 
 % Grab the figure handle
 handles=guidata(fighandle);
-%{
-% Make new positions based on current power levels
-if (get(handles.calc_next_pos,'Value') == 1)
-    [nrows, ~] = size(handles.position_setpoints);
-    [rows_needed,~] = size(handles.power_data);
-    if (nrows == 0)
-        handles.index = 2;
-        try
-            handles.position_setpoints = [  handles.time_stamp(end)   0.0	  0.0	  0.0	  0.0	  0.0   0.0;...
-                handles.time_stamp(end)   0.0	  0.0	  0.0	  0.0	  0.0   0.0];
-        catch
-            handles.position_setpoints = [  0   0.0	  0.0	  0.0	  0.0	  0.0   0.0;...
-                0.5   0.0	  0.0	  0.0	  0.0	  0.0   0.0];
-        end 
-    end
-    while (rows_needed >= nrows)
-        handles.position_setpoints(end+1,:) = [handles.position_setpoints(end,1) + 1, get_current_position(handles)];
-        [nrows, ~] = size(handles.position_setpoints);
-    end
-    [handles.position_setpoints(end,1) + 1, get_next_setpoints(handles)];
-    handles.position_setpoints(end+1,:) = [handles.position_setpoints(end,1) + 1, get_next_setpoints(handles)];
-    [handles.position_setpoints(end,1) + 1, get_next_setpoints(handles)];
-end
-%}
+
 % If there are more rows than the current index
 [nrows, ~] = size(handles.position_setpoints);
-if (handles.index < nrows && (get(handles.calc_next_pos,'Value') == 0))
+if (handles.index < nrows )%&& (get(handles.calc_next_pos,'Value') == 0))
     %This loop makes sure that if, for whatever reason, the current time is
     %greater than the index (which shouldn't happen), then the program will
     %increment the index until it reaches a time greater than the current time
-    while (handles.index < nrows && handles.position_setpoints(handles.index, 1) < (handles.timer.TasksExecuted * handles.timer.AveragePeriod))
+    while (handles.index < nrows && handles.position_setpoints(handles.index, 1) ...
+            < (handles.timer.TasksExecuted * handles.timer.AveragePeriod))
         handles.index = handles.index + 1;
     end
 
@@ -401,7 +379,15 @@ if (handles.index < nrows && (get(handles.calc_next_pos,'Value') == 0))
 end
 
 if (get(handles.calc_next_pos,'Value') == 1)
-    write_next_positions(handles, get_next_setpoints(handles));
+    % Comment this try catch if you like, it is copied from writ_next_positions
+    try
+        pos = get_next_setpoints(handles);
+        handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos];
+    catch
+        pos = get_next_setpoints(handles);
+        handles.position_setpoints(end+1, :) = [0, pos];
+    end
+    %write_next_positions(fighandle, handles, get_next_setpoints(handles));
 end
 
 % Read from the laser
@@ -1024,19 +1010,8 @@ EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
 
 return_this = get_current_position(handles) / EncoderScaling + 1;
 
-%{
-pos1 = current_pos(1) + 1; 
-pos2 = current_pos(2) + 1; 
-pos3 = current_pos(3) + 1; 
-pos1_2 = current_pos(4) + 1;
-pos2_2 = current_pos(5) + 1; 
-pos3_2 = current_pos(6) + 1; 
-
-return_this = [pos1, pos2, pos3, pos1_2, pos2_2, pos3_2];
-%}
-
-% Function to get the current positions
-function return_this = get_current_position(handles)
+% --- Function to get the current positions
+function positions = get_current_position(handles)
 try
     current_pos1 = eval(get(handles.Pos1Set,'String')); 
     current_pos2 = eval(get(handles.Pos2Set,'String'));
@@ -1053,7 +1028,7 @@ catch
     current_pos3_2 = 0;
 end
 
-return_this = [current_pos1, current_pos2, current_pos3, ...
+positions = [current_pos1, current_pos2, current_pos3, ...
     current_pos1_2, current_pos2_2, current_pos3_2];
 
 % --- Executes on button press in calc_next_pos.
@@ -1061,7 +1036,15 @@ function calc_next_pos_Callback(hObject, eventdata, handles)
 % Hint: get(hObject,'Value') returns toggle state of checkbox6
 
 % Writes the current screw position for setting next position
-function write_next_positions(handles, pos)
+function write_next_positions(fighandle, handles, pos)
+try
+    handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos];
+catch
+    handles.position_setpoints(end+1, :) = [0, pos];
+end
+guidata(fighandle,handles)
+
+%{
 EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
 
 set(handles.screw_pos_1, 'String', pos(1) * EncoderScaling);
@@ -1087,4 +1070,4 @@ pause(.015)
 set(handles.screw_pos_3_2, 'String', pos(6) * EncoderScaling);
 fprintf(handles.objs(2),'%s\n',['P3',int2str(pos(6))]);
 pause(.015)
-
+%}
