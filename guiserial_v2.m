@@ -1,7 +1,14 @@
 %{
 Notes:
-Change slider and Get Data both need 1,2 manually changed right now. Easily
-chagned.
+TODO: Function that takes power and positions as an input and 
+outputs next set the position (CONTROLLER FUNCTION)
+
+
+TODO: Option to 'fake' power data. Option to read from Ophir or to fake power
+data
+UPDATE: Done, called spoof_power(), but right now looks at set points. For
+real data, change 'Pos1Set' to 'Pos1', etc. for all positions.
+
 %}
 function varargout = guiserial_v2(varargin)
 % GUISERIAL_V2 MATLAB code for guiserial_v2.fig
@@ -27,7 +34,7 @@ function varargout = guiserial_v2(varargin)
 
 % Edit the above text to modify the response to help guiserial_v2
 
-% Last Modified by GUIDE v2.5 03-Oct-2016 15:30:35
+% Last Modified by GUIDE v2.5 12-Oct-2016 15:15:20
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -189,14 +196,14 @@ case(1)
 % If case(0), then close all existing connections and output the data    
 case(0)
     
+    % Stop the timer
+    stop(handles.timer);
+    
     % Ensure the 'Start' button states match
     set(handles.startbutton_no_file, 'Value', 0);
     
     %% Do all the arduino bookkeeping
     disp('Closing Arduino Connections')
-    
-    % Stop the timer
-    stop(handles.timer);
     
     % Close the arduino connection if it is active
     for i = 1:length(handles.objs)
@@ -220,7 +227,7 @@ case(0)
         if (~isempty(handles.position_data{1,row}))
             fprintf(fileID,'%5.2f\t', handles.time_stamp(1, row));
             fprintf(fileID,'%3.5f\t',handles.power_data(2, row));
-            fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
+            %fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
             fprintf(fileID,'%s', handles.position_data{1,row});
         end
     end
@@ -276,20 +283,37 @@ startbutton_Callback(hObject, [], handles);
 
 
 %% Executes every period (.5 by default) when either 'Start' button is pressed
-function timer_callback(obj,~,fighandle)
-%handles=guidata(fighandle);
-%for i = 1:length(handles.objs)
-%    get_data(obj, fighandle, 1);
-%end
-get_data(fighandle, 1)
-get_data(fighandle, 2)
+function timer_callback(~,~,fighandle)
 
-%% Works with the timer_callback function
-function get_data(fighandle, port_index)
+% Grab the figure handle
 handles=guidata(fighandle);
-
+%{
+% Make new positions based on current power levels
+if (get(handles.calc_next_pos,'Value') == 1)
+    [nrows, ~] = size(handles.position_setpoints);
+    [rows_needed,~] = size(handles.power_data);
+    if (nrows == 0)
+        handles.index = 2;
+        try
+            handles.position_setpoints = [  handles.time_stamp(end)   0.0	  0.0	  0.0	  0.0	  0.0   0.0;...
+                handles.time_stamp(end)   0.0	  0.0	  0.0	  0.0	  0.0   0.0];
+        catch
+            handles.position_setpoints = [  0   0.0	  0.0	  0.0	  0.0	  0.0   0.0;...
+                0.5   0.0	  0.0	  0.0	  0.0	  0.0   0.0];
+        end 
+    end
+    while (rows_needed >= nrows)
+        handles.position_setpoints(end+1,:) = [handles.position_setpoints(end,1) + 1, get_current_position(handles)];
+        [nrows, ~] = size(handles.position_setpoints);
+    end
+    [handles.position_setpoints(end,1) + 1, get_next_setpoints(handles)];
+    handles.position_setpoints(end+1,:) = [handles.position_setpoints(end,1) + 1, get_next_setpoints(handles)];
+    [handles.position_setpoints(end,1) + 1, get_next_setpoints(handles)];
+end
+%}
+% If there are more rows than the current index
 [nrows, ~] = size(handles.position_setpoints);
-if (handles.index < nrows)
+if (handles.index < nrows && (get(handles.calc_next_pos,'Value') == 0))
     %This loop makes sure that if, for whatever reason, the current time is
     %greater than the index (which shouldn't happen), then the program will
     %increment the index until it reaches a time greater than the current time
@@ -303,9 +327,9 @@ if (handles.index < nrows)
     % Write new positions to the motors
     % disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
     EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
-    
+
     %% Position stuff for assembly 1
-    
+
     % Write to motor 1 assembly 1
     set(handles.screw_pos_1, 'String', handles.position_setpoints(handles.index, 2) * EncoderScaling);    
     if (handles.position_setpoints(handles.index, 2) - handles.position_setpoints(handles.index - 1, 2) >= 0)
@@ -376,6 +400,10 @@ if (handles.index < nrows)
     pause(.015);
 end
 
+if (get(handles.calc_next_pos,'Value') == 1)
+    write_next_positions(handles, get_next_setpoints(handles));
+end
+
 % Read from the laser
 [Value, Timestamp, ~]= handles.ophir_app.GetData(handles.open_USB(1),0);
 
@@ -388,15 +416,23 @@ if (~isempty(Value))
     fprintf(handles.objs(1),'%s\n','D');
     fprintf(handles.objs(2),'%s\n','D');
     pause(.015);
-
+    
+    % Choose which power to use
+    switch (get(handles.spoof_power,'Value'))
+        case(0)
+            power = Value(end);
+        case(1)
+            power = spoof_power(handles);
+    end
+    
     % Save the gathered data
     handles.time_stamp(1, end+1) = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
-    handles.power_data(2,end+1) = Value(end); %Only log the last sample
+    handles.power_data(2,end+1) = power; %Only log the last sample
     handles.power_data(1,end) = Timestamp(end); %Only log the last timestamp
     
     % Update the GUI laser_power object
     h=findobj(handles.guiserial,'Tag','laser_power');
-    set(h,'String',Value(end));
+    set(h,'String',power);
     
     % Activly plot the power data (comment line to stop active graphing)
     plot(handles.time_stamp(1, :),handles.power_data(2, :));
@@ -413,7 +449,9 @@ if (~isempty(Value))
     data = fgets(handles.objs(1));
     data_2 = fgets(handles.objs(2));
     values=handles.position_data;
-    handles.position_data{length(values)+1}=[data, data_2];
+    data_1 = data(1:length(data)-9);
+    %data_to_save = data_2(1:length(data_2) - 9);
+    handles.position_data{length(values)+1}=[data_1, ' ', data_2];
 
     % Assembly 1
     dataarray = strsplit(data,char(9));
@@ -473,6 +511,7 @@ if (~isempty(Value))
         set(h,'String',dataarray{11});
         h=findobj(handles.guiserial,'Tag','IntErr3_2');
         set(h,'String',dataarray{12});
+        
     end
 end
 
@@ -818,6 +857,20 @@ if (close_handles)
     fclose(handles.obj);
 end
 
+%% Function to spoof the Power data for testing purposes
+function [power] = spoof_power(handles)
+
+try
+    pos1 = eval(get(handles.Pos1Set,'String'));
+    pos2 = eval(get(handles.Pos2Set,'String'));
+    pos3 = eval(get(handles.Pos3Set,'String'));
+catch
+    pos1 = 0;
+    pos2 = 0;
+    pos3 = 0;
+end
+
+power = 12 * (mod(pos1, 2) + mod(pos2, 2) + mod(pos3, 2));
 
 %% --- Executes on button press in snug.
 function snug_Callback(hObject, eventdata, handles)
@@ -959,3 +1012,79 @@ function backlash_3_2_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+% --- Executes on button press in spoof_power.
+function spoof_power_Callback(hObject, eventdata, handles)
+
+% Function to get the setpoints based on current data
+function return_this = get_next_setpoints(handles)
+
+EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+
+return_this = get_current_position(handles) / EncoderScaling + 1;
+
+%{
+pos1 = current_pos(1) + 1; 
+pos2 = current_pos(2) + 1; 
+pos3 = current_pos(3) + 1; 
+pos1_2 = current_pos(4) + 1;
+pos2_2 = current_pos(5) + 1; 
+pos3_2 = current_pos(6) + 1; 
+
+return_this = [pos1, pos2, pos3, pos1_2, pos2_2, pos3_2];
+%}
+
+% Function to get the current positions
+function return_this = get_current_position(handles)
+try
+    current_pos1 = eval(get(handles.Pos1Set,'String')); 
+    current_pos2 = eval(get(handles.Pos2Set,'String'));
+    current_pos3 = eval(get(handles.Pos3Set,'String'));
+    current_pos1_2 = eval(get(handles.Pos1Set_2,'String'));
+    current_pos2_2 = eval(get(handles.Pos2Set_2,'String'));
+    current_pos3_2 = eval(get(handles.Pos3Set_2,'String'));
+catch
+    current_pos1 = 0;
+    current_pos2 = 0;
+    current_pos3 = 0;
+    current_pos1_2 = 0;
+    current_pos2_2 = 0;
+    current_pos3_2 = 0;
+end
+
+return_this = [current_pos1, current_pos2, current_pos3, ...
+    current_pos1_2, current_pos2_2, current_pos3_2];
+
+% --- Executes on button press in calc_next_pos.
+function calc_next_pos_Callback(hObject, eventdata, handles)
+% Hint: get(hObject,'Value') returns toggle state of checkbox6
+
+% Writes the current screw position for setting next position
+function write_next_positions(handles, pos)
+EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+
+set(handles.screw_pos_1, 'String', pos(1) * EncoderScaling);
+fprintf(handles.objs(1),'%s\n',['P1',int2str(pos(1))]);
+pause(.015)
+
+set(handles.screw_pos_2, 'String', pos(2) * EncoderScaling);
+fprintf(handles.objs(1),'%s\n',['P2',int2str(pos(2))]);
+pause(.015)
+
+set(handles.screw_pos_3, 'String', pos(3) * EncoderScaling);
+fprintf(handles.objs(1),'%s\n',['P3',int2str(pos(3))]);
+pause(.015)
+
+set(handles.screw_pos_1_2, 'String', pos(4) * EncoderScaling);
+fprintf(handles.objs(2),'%s\n',['P1',int2str(pos(4))]);
+pause(.015)
+
+set(handles.screw_pos_2_2, 'String', pos(5) * EncoderScaling);
+fprintf(handles.objs(2),'%s\n',['P2',int2str(pos(5))]);
+pause(.015)
+
+set(handles.screw_pos_3_2, 'String', pos(6) * EncoderScaling);
+fprintf(handles.objs(2),'%s\n',['P3',int2str(pos(6))]);
+pause(.015)
+
