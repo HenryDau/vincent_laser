@@ -34,7 +34,7 @@ function varargout = guiserial_v2(varargin)
 
 % Edit the above text to modify the response to help guiserial_v2
 
-% Last Modified by GUIDE v2.5 12-Oct-2016 15:15:20
+% Last Modified by GUIDE v2.5 01-Nov-2016 11:32:45
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -107,13 +107,19 @@ if (~isfield(handles, 'read_from_file'))
     handles.read_from_file = true;
 end
 
+if (~isfield(handles, 'fake_power'))
+    handles.fake_power = false;
+end
+
 v=get(hObject,'Value');
 switch(v)
 % If case(1), all conenctions are closed, so open Arduino COM conncetions
 % and OPHIR laser connection
 case(1)
+    
     % Ensure the button states always match
     set(handles.startbutton_no_file, 'Value', 1);
+    set(handles.startbutton_fake_power, 'Value', 1);
     
     handles.position_setpoints = [];
     if (handles.read_from_file)
@@ -121,15 +127,15 @@ case(1)
         handles.position_setpoints = load('test_data.txt');
     end
     handles.index = 2;
+    
     disp('Opening Arduino Connections: Starting timer object')
-
     % Make sure there is no connection over the USB for all COMS.
     % (This should only execute if there was an error on the previous run)
     for i = 1:length(handles.COMS)
         if (~isempty(instrfind('Port',handles.COMS(i))))
+            disp 'Closing irrelavent connections'
             x=instrfind('Port',handles.COMS(i));
             fclose(x);
-            delete(x);
         end
     end
     
@@ -158,32 +164,11 @@ case(1)
     %    make_snug(i, handles);
     %end
     
-    %% Start the laser connections and start retrieving data
-    try
-        disp('Opening laser connections');
-        ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
-    catch COM_error
-        disp(COM_error.message);
-        error('Could not establist a link to OphirLMMeasurement');
-    end
-
-    % Use some of the methods of the object to modify some settings, do some
-    % initialisation etc
-    % Request the object scans for USB devices:
-    SerialNumbers = ophirApp.ScanUSB;
-    if(isempty(SerialNumbers))
-        warndlg('No USB devices seem to be connected. Please check and try again',...
-                'Ophir Measurement COM interface: ScanUSB error')
-    end
-
-    % Open the first USB device found:
-    h_USB = ophirApp.OpenUSBDevice(SerialNumbers{1});
-
-    % Instruct the sensor to start streaming measurements on the first channel:
-    ophirApp.StartStream(h_USB(1),0);
-    handles.ophir_app = ophirApp;
-    handles.open_USB = h_USB;
+    handles = open_laser_connections(hObject, handles);
+    
     handles.power_data=[];
+    handles.Value = [];
+    handles.Timestamp = [];
     
     % Make a new figure for graphing during operation
     figure;
@@ -201,6 +186,7 @@ case(0)
     
     % Ensure the 'Start' button states match
     set(handles.startbutton_no_file, 'Value', 0);
+    set(handles.startbutton_fake_power, 'Value', 0);
     
     %% Do all the arduino bookkeeping
     disp('Closing Arduino Connections')
@@ -235,14 +221,16 @@ case(0)
     disp(['Output to file: log_run', int2str(counter), '.txt']);
     
     %% Do all the laser bookeeping
-    disp('Closing laser connections');
-    ophir_app=handles.ophir_app;
-    if ~isempty(ophir_app),
-        % Close the laser connections
-        ophir_app.StopAllStreams;
-        ophir_app.CloseAll;
-        ophir_app.delete;
-        clear ophir_app
+    if (~handles.fake_power)
+        disp('Closing laser connections');
+        ophir_app=handles.ophir_app;
+        if ~isempty(ophir_app),
+            % Close the laser connections
+            ophir_app.StopAllStreams;
+            ophir_app.CloseAll;
+            ophir_app.delete;
+            clear ophir_app
+        end
     end
     
     %Plot the laser data (Commented because of active_plotting)
@@ -262,6 +250,80 @@ end
 % Save changes made to handles
 guidata(hObject,handles);
 
+function [handles] = open_laser_connections(hObject, handles)
+do_new = true;
+
+if (do_new)
+    % Open the laser connections first (fail if unable to open)
+    if (1)%(~handles.fake_power) %TODO: Figure out why this line is slow when faking power data
+        %% Start the laser connections and start retrieving data
+        try
+            disp('Opening laser connections');
+            ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
+            % Use some of the methods of the object to modify some settings, do some
+            % initialisation etc
+            % Request the object scans for USB devices:
+            SerialNumbers = ophirApp.ScanUSB;
+            if(isempty(SerialNumbers))
+                disp ('No USB devices seem to be connected. Please check and try again',...
+                        'Ophir Measurement COM interface: ScanUSB error')
+            end
+        catch COM_error
+            disp(COM_error.message);
+            %error('Could not establish a link to OphirLMMeasurement');
+            %if (~handles.fake_power)
+            %disp 'No laser connection detected. Please use the Start (fake_power).'
+            %set(handles.startbutton, 'Value', 0);
+            %set(handles.startbutton_no_file, 'Value', 0);
+            %set(handles.startbutton_fake_power, 'Value', 0);
+
+            %return
+            %end
+        end
+    end
+
+    if (~handles.fake_power)
+        % Open the first USB device found:
+        h_USB = ophirApp.OpenUSBDevice(SerialNumbers{1});
+
+        % Instruct the sensor to start streaming measurements on the first channel:
+        ophirApp.StartStream(h_USB(1),0);
+        handles.ophir_app = ophirApp;
+        handles.open_USB = h_USB;
+    end
+
+else
+
+    %% Start the laser connections and start retrieving data
+    try
+        disp('Opening laser connections');
+        ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
+    catch COM_error
+        disp(COM_error.message);
+        error('Could not establist a link to OphirLMMeasurement');
+    end
+
+    % Use some of the methods of the object to modify some settings, do some
+    % initialisation etc
+    % Request the object scans for USB devices:
+    SerialNumbers = ophirApp.ScanUSB;
+    if(isempty(SerialNumbers))
+        warndlg('No USB devices seem to be connected. Please check and try again',...
+                'Ophir Measurement COM interface: ScanUSB error')
+    end
+
+    % Open the first USB device found:
+    h_USB = ophirApp.OpenUSBDevice(SerialNumbers{1});
+
+    % Instruct the sensor to start streaming measurements on the first channel:
+    ophirApp.StartStream(h_USB(1),0);
+    handles.ophir_app = ophirApp;
+    handles.open_USB = h_USB;
+end
+% Save changes made to handles
+guidata(hObject,handles);
+
+
 %% --- Executes on button press in startbutton_no_file.
 function startbutton_no_file_Callback(hObject, ~, handles)
 % Ensure the state of the two start buttons is always the same
@@ -269,11 +331,14 @@ v=get(hObject,'Value');
 switch(v)
 case(1)
     set(handles.startbutton, 'Value', 1);
+    set(handles.startbutton_fake_power, 'Value', 1);
+    handles.read_from_file = false;
+    handles.fake_power = false;
 case(0)
     set(handles.startbutton, 'Value', 0);  
+    set(handles.startbutton_fake_power, 'Value', 0); 
 end
 
-handles.read_from_file = false;
 
 % Update handles structure
 guidata(hObject, handles);
@@ -281,228 +346,250 @@ guidata(hObject, handles);
 %Call the main start button (which won't read from a filenow)
 startbutton_Callback(hObject, [], handles);
 
+%% --- Executes on button press in startbutton_fake_power.
+function startbutton_fake_power_Callback(hObject, eventdata, handles)
+% Ensure the state of the two start buttons is always the same
+v=get(hObject,'Value');
+switch(v)
+case(1)
+    set(handles.startbutton, 'Value', 1);
+    set(handles.startbutton_no_file, 'Value', 1);
+    handles.fake_power = true;
+    handles.read_from_file = false;
+case(0)
+    set(handles.startbutton, 'Value', 0);
+    set(handles.startbutton_no_file, 'Value', 0);
+end
+
+
+% Update handles structure
+guidata(hObject, handles);
+
+%Call the main start button (which won't read from a filenow)
+startbutton_Callback(hObject, [], handles);
 
 %% Executes every period (.5 by default) when either 'Start' button is pressed
 function timer_callback(~,~,fighandle)
 
-% Grab the figure handle
-handles=guidata(fighandle);
+try
+    % Grab the figure handle
+    handles=guidata(fighandle);
 
-% If there are more rows than the current index
-[nrows, ~] = size(handles.position_setpoints);
-if (handles.index < nrows )%&& (get(handles.calc_next_pos,'Value') == 0))
-    %This loop makes sure that if, for whatever reason, the current time is
-    %greater than the index (which shouldn't happen), then the program will
-    %increment the index until it reaches a time greater than the current time
-    while (handles.index < nrows && handles.position_setpoints(handles.index, 1) ...
-            < (handles.timer.TasksExecuted * handles.timer.AveragePeriod))
-        handles.index = handles.index + 1;
+    % If there are more rows than the current index
+    [nrows, ~] = size(handles.position_setpoints);
+    if (handles.index < nrows )%&& (get(handles.calc_next_pos,'Value') == 0))
+        %This loop makes sure that if, for whatever reason, the current time is
+        %greater than the index (which shouldn't happen), then the program will
+        %increment the index until it reaches a time greater than the current time
+        while (handles.index < nrows && handles.position_setpoints(handles.index, 1) ...
+                < (handles.timer.TasksExecuted * handles.timer.AveragePeriod))
+            handles.index = handles.index + 1;
+        end
+
+        % Look at the position_setpoints to see if motor instructions need to be
+        % sent out (if true, then the motor needs to change position)
+
+        % Write new positions to the motors
+        % disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
+        EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+
+        %% Position stuff for assembly 1
+
+        % Write to motor 1 assembly 1
+        set(handles.screw_pos_1, 'String', handles.position_setpoints(handles.index, 2) * EncoderScaling);    
+        if (handles.position_setpoints(handles.index, 2) - handles.position_setpoints(handles.index - 1, 2) >= 0)
+            fprintf(handles.objs(1),'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
+        else
+            fprintf(handles.objs(1),'%s\n',['P1', ...
+                   (int2str((handles.position_setpoints(handles.index, 2)) - eval(get(handles.backlash_1,'String'))))])
+        end
+        pause(.015);
+
+        % Write to motor 2 assembly 1
+        set(handles.screw_pos_2, 'String', handles.position_setpoints(handles.index, 3) * EncoderScaling);
+        if (handles.position_setpoints(handles.index, 3) - handles.position_setpoints(handles.index - 1, 3) >= 0)
+            % Write motor 2 to the position specified in position setpoints
+            % without backlash
+            fprintf(handles.objs(1),'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
+        else
+            % Write motor 2 to the position specified in position setpoints
+            % with backlash
+            fprintf(handles.objs(1),'%s\n',['P2', ...
+                   (int2str((handles.position_setpoints(handles.index, 3)) - eval(get(handles.backlash_2,'String'))))])
+        end
+        pause(.015);
+
+        % Write to motor 3 assembly 1
+        set(handles.screw_pos_3, 'String', handles.position_setpoints(handles.index, 4) * EncoderScaling);
+        if (handles.position_setpoints(handles.index, 4) - handles.position_setpoints(handles.index - 1, 4) >= 0)
+            fprintf(handles.objs(1),'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
+        else
+            fprintf(handles.objs(1),'%s\n',['P3', ...
+                   (int2str((handles.position_setpoints(handles.index, 4)) - eval(get(handles.backlash_3,'String'))))])
+        end
+        pause(.015);
+
+        %% Position stuff for assembly 2
+        % Write to motor 1 assembly 2
+        set(handles.screw_pos_1_2, 'String', handles.position_setpoints(handles.index, 5) * EncoderScaling);    
+        if (handles.position_setpoints(handles.index, 5) - handles.position_setpoints(handles.index - 1, 5) >= 0)
+            fprintf(handles.objs(2),'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 5))])
+        else
+            fprintf(handles.objs(2),'%s\n',['P1', ...
+                   (int2str((handles.position_setpoints(handles.index, 5)) - eval(get(handles.backlash_1_2,'String'))))])
+        end
+        pause(.015);
+
+        % Write to motor 2 assembly 2
+        set(handles.screw_pos_2_2, 'String', handles.position_setpoints(handles.index, 6) * EncoderScaling);
+        if (handles.position_setpoints(handles.index, 6) - handles.position_setpoints(handles.index - 1, 6) >= 0)
+            % Write motor 2 to the position specified in position setpoints
+            % without backlash
+            fprintf(handles.objs(2),'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 6))])
+        else
+            % Write motor 2 to the position specified in position setpoints
+            % with backlash
+            fprintf(handles.objs(2),'%s\n',['P2', ...
+                   (int2str((handles.position_setpoints(handles.index, 6)) - eval(get(handles.backlash_2_2,'String'))))])
+        end
+        pause(.015);
+
+        % Write to motor 3 assembly 2
+        set(handles.screw_pos_3_2, 'String', handles.position_setpoints(handles.index, 7) * EncoderScaling);
+        if (handles.position_setpoints(handles.index, 7) - handles.position_setpoints(handles.index - 1, 7) >= 0)
+            fprintf(handles.objs(2),'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 7))])
+        else
+            fprintf(handles.objs(2),'%s\n',['P3', ...
+                   (int2str((handles.position_setpoints(handles.index, 7)) - eval(get(handles.backlash_3_2,'String'))))])
+        end
+        pause(.015);
     end
 
-    % Look at the position_setpoints to see if motor instructions need to be
-    % sent out (if true, then the motor needs to change position)
+    if (get(handles.calc_next_pos,'Value') == 1)
+        % Comment this try catch if you like, it is copied from writ_next_positions
+        try
+            pos = get_next_setpoints(handles);
+            handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos];
+        catch
+            pos = get_next_setpoints(handles);
+            handles.position_setpoints(end+1, :) = [0, pos];
+        end
+        %write_next_positions(fighandle, handles, get_next_setpoints(handles));
+    end
 
-    % Write new positions to the motors
-    % disp(['P1',int2str(handles.position_setpoints(handles.index, 2))]);
-    EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
-
-    %% Position stuff for assembly 1
-
-    % Write to motor 1 assembly 1
-    set(handles.screw_pos_1, 'String', handles.position_setpoints(handles.index, 2) * EncoderScaling);    
-    if (handles.position_setpoints(handles.index, 2) - handles.position_setpoints(handles.index - 1, 2) >= 0)
-        fprintf(handles.objs(1),'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 2))])
+    if (~handles.fake_power)
+        % Read from the laser
+        [handles.Value, handles.Timestamp, ~] = handles.ophir_app.GetData(handles.open_USB(1),0);
     else
-        fprintf(handles.objs(1),'%s\n',['P1', ...
-               (int2str((handles.position_setpoints(handles.index, 2)) - eval(get(handles.backlash_1,'String'))))])
+        % Don't read from the laser
+        handles.Value = spoof_power(handles);
+        handles.Timestamp = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
     end
-    pause(.015);
-
-    % Write to motor 2 assembly 1
-    set(handles.screw_pos_2, 'String', handles.position_setpoints(handles.index, 3) * EncoderScaling);
-    if (handles.position_setpoints(handles.index, 3) - handles.position_setpoints(handles.index - 1, 3) >= 0)
-        % Write motor 2 to the position specified in position setpoints
-        % without backlash
-        fprintf(handles.objs(1),'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 3))])
-    else
-        % Write motor 2 to the position specified in position setpoints
-        % with backlash
-        fprintf(handles.objs(1),'%s\n',['P2', ...
-               (int2str((handles.position_setpoints(handles.index, 3)) - eval(get(handles.backlash_2,'String'))))])
-    end
-    pause(.015);
-
-    % Write to motor 3 assembly 1
-    set(handles.screw_pos_3, 'String', handles.position_setpoints(handles.index, 4) * EncoderScaling);
-    if (handles.position_setpoints(handles.index, 4) - handles.position_setpoints(handles.index - 1, 4) >= 0)
-        fprintf(handles.objs(1),'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 4))])
-    else
-        fprintf(handles.objs(1),'%s\n',['P3', ...
-               (int2str((handles.position_setpoints(handles.index, 4)) - eval(get(handles.backlash_3,'String'))))])
-    end
-    pause(.015);
     
-    %% Position stuff for assembly 2
-    % Write to motor 1 assembly 2
-    set(handles.screw_pos_1_2, 'String', handles.position_setpoints(handles.index, 5) * EncoderScaling);    
-    if (handles.position_setpoints(handles.index, 5) - handles.position_setpoints(handles.index - 1, 5) >= 0)
-        fprintf(handles.objs(2),'%s\n',['P1',int2str(handles.position_setpoints(handles.index, 5))])
-    else
-        fprintf(handles.objs(2),'%s\n',['P1', ...
-               (int2str((handles.position_setpoints(handles.index, 5)) - eval(get(handles.backlash_1_2,'String'))))])
-    end
-    pause(.015);
+    %Check to see if the laser value is valid (Ensure the number of data points
+    %is consistent
+    if (~isempty(handles.Value))
+        pause(.015);
 
-    % Write to motor 2 assembly 2
-    set(handles.screw_pos_2_2, 'String', handles.position_setpoints(handles.index, 6) * EncoderScaling);
-    if (handles.position_setpoints(handles.index, 6) - handles.position_setpoints(handles.index - 1, 6) >= 0)
-        % Write motor 2 to the position specified in position setpoints
-        % without backlash
-        fprintf(handles.objs(2),'%s\n',['P2',int2str(handles.position_setpoints(handles.index, 6))])
-    else
-        % Write motor 2 to the position specified in position setpoints
-        % with backlash
-        fprintf(handles.objs(2),'%s\n',['P2', ...
-               (int2str((handles.position_setpoints(handles.index, 6)) - eval(get(handles.backlash_2_2,'String'))))])
-    end
-    pause(.015);
+        %Request arduino data
+        fprintf(handles.objs(1),'%s\n','D');
+        fprintf(handles.objs(2),'%s\n','D');
+        pause(.015);
 
-    % Write to motor 3 assembly 2
-    set(handles.screw_pos_3_2, 'String', handles.position_setpoints(handles.index, 7) * EncoderScaling);
-    if (handles.position_setpoints(handles.index, 7) - handles.position_setpoints(handles.index - 1, 7) >= 0)
-        fprintf(handles.objs(2),'%s\n',['P3',int2str(handles.position_setpoints(handles.index, 7))])
-    else
-        fprintf(handles.objs(2),'%s\n',['P3', ...
-               (int2str((handles.position_setpoints(handles.index, 7)) - eval(get(handles.backlash_3_2,'String'))))])
+        % Save the gathered data
+        if (~isnan(handles.Timestamp(end)))
+            handles.time_stamp(1, end+1) = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
+            handles.power_data(2,end+1) = handles.Value(end); %Only log the last sample
+            handles.power_data(1,end) = handles.Timestamp(end); %Only log the last timestamp
+        end
+
+        % Update the GUI laser_power object
+        h=findobj(handles.guiserial,'Tag','laser_power');
+        set(h,'String',handles.Value(end));
+
+        % Activly plot the power data (comment line to stop active graphing)
+        plot(handles.time_stamp(1, :),handles.power_data(2, :));
+
+        % Take into account backlash for these data points
+        handles.pos_command_with_backlash(end + 1,1) = eval(get(handles.screw_pos_1, 'String'));
+        handles.pos_command_with_backlash(end,2) = eval(get(handles.screw_pos_2, 'String'));
+        handles.pos_command_with_backlash(end,3) = eval(get(handles.screw_pos_3, 'String'));
+        handles.pos_command_with_backlash(end,4) = eval(get(handles.screw_pos_1_2, 'String'));
+        handles.pos_command_with_backlash(end,5) = eval(get(handles.screw_pos_2_2, 'String'));
+        handles.pos_command_with_backlash(end,6) = eval(get(handles.screw_pos_3_2, 'String'));
+
+        % Read the desired number of data bytes
+        data = fgets(handles.objs(1));
+        data_2 = fgets(handles.objs(2));
+        values=handles.position_data;
+        data_1 = data(1:length(data)-9);
+        handles.position_data{length(values)+1}=[data_1, ' ', data_2];
+
+        % Assembly 1
+        dataarray = strsplit(data,char(9));
+        if length(dataarray)>=14,
+            h=findobj(handles.guiserial,'Tag','Pos1Set');
+            set(h,'String',dataarray{1});
+            h=findobj(handles.guiserial,'Tag','Pos1');
+            set(h,'String',dataarray{2});
+            h=findobj(handles.guiserial,'Tag','MotorCommand1');
+            set(h,'String',dataarray{3});
+            h=findobj(handles.guiserial,'Tag','IntErr1');
+            set(h,'String',dataarray{4});
+            h=findobj(handles.guiserial,'Tag','Pos2Set');
+            set(h,'String',dataarray{5});
+            h=findobj(handles.guiserial,'Tag','Pos2');
+            set(h,'String',dataarray{6});
+            h=findobj(handles.guiserial,'Tag','MotorCommand2');
+            set(h,'String',dataarray{7});
+            h=findobj(handles.guiserial,'Tag','IntErr2');
+            set(h,'String',dataarray{8});
+            h=findobj(handles.guiserial,'Tag','Pos3Set');
+            set(h,'String',dataarray{9});
+            h=findobj(handles.guiserial,'Tag','Pos3');
+            set(h,'String',dataarray{10});
+            h=findobj(handles.guiserial,'Tag','MotorCommand3');
+            set(h,'String',dataarray{11});
+            h=findobj(handles.guiserial,'Tag','IntErr3');
+            set(h,'String',dataarray{12});
+            h=findobj(handles.guiserial,'Tag','is_error');
+            set(h,'String',dataarray{14});
+        end
+
+        % Assembly 2
+        dataarray = strsplit(data_2,char(9));
+        if length(dataarray)>=14,
+            h=findobj(handles.guiserial,'Tag','Pos1Set_2');
+            set(h,'String',dataarray{1});
+            h=findobj(handles.guiserial,'Tag','Pos1_2');
+            set(h,'String',dataarray{2});
+            h=findobj(handles.guiserial,'Tag','MotorCommand1_2');
+            set(h,'String',dataarray{3});
+            h=findobj(handles.guiserial,'Tag','IntErr1_2');
+            set(h,'String',dataarray{4});
+            h=findobj(handles.guiserial,'Tag','Pos2Set_2');
+            set(h,'String',dataarray{5});
+            h=findobj(handles.guiserial,'Tag','Pos2_2');
+            set(h,'String',dataarray{6});
+            h=findobj(handles.guiserial,'Tag','MotorCommand2_2');
+            set(h,'String',dataarray{7});
+            h=findobj(handles.guiserial,'Tag','IntErr2_2');
+            set(h,'String',dataarray{8});
+            h=findobj(handles.guiserial,'Tag','Pos3Set_2');
+            set(h,'String',dataarray{9});
+            h=findobj(handles.guiserial,'Tag','Pos3_2');
+            set(h,'String',dataarray{10});
+            h=findobj(handles.guiserial,'Tag','MotorCommand3_2');
+            set(h,'String',dataarray{11});
+            h=findobj(handles.guiserial,'Tag','IntErr3_2');
+            set(h,'String',dataarray{12});
+        end
     end
-    pause(.015);
+    disp('data read')
+    guidata(fighandle,handles);
+catch
+    disp 'If this message shows up once, ignore it.'
 end
-
-if (get(handles.calc_next_pos,'Value') == 1)
-    % Comment this try catch if you like, it is copied from writ_next_positions
-    try
-        pos = get_next_setpoints(handles);
-        handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos];
-    catch
-        pos = get_next_setpoints(handles);
-        handles.position_setpoints(end+1, :) = [0, pos];
-    end
-    %write_next_positions(fighandle, handles, get_next_setpoints(handles));
-end
-
-% Read from the laser
-[Value, Timestamp, ~]= handles.ophir_app.GetData(handles.open_USB(1),0);
-
-%Check to see if the laser value is valid (Ensure the number of data points
-%is consistent
-if (~isempty(Value))
-    pause(.015);
-    
-    %Request arduino data
-    fprintf(handles.objs(1),'%s\n','D');
-    fprintf(handles.objs(2),'%s\n','D');
-    pause(.015);
-    
-    % Choose which power to use
-    switch (get(handles.spoof_power,'Value'))
-        case(0)
-            power = Value(end);
-        case(1)
-            power = spoof_power(handles);
-    end
-    
-    % Save the gathered data
-    handles.time_stamp(1, end+1) = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
-    handles.power_data(2,end+1) = power; %Only log the last sample
-    handles.power_data(1,end) = Timestamp(end); %Only log the last timestamp
-    
-    % Update the GUI laser_power object
-    h=findobj(handles.guiserial,'Tag','laser_power');
-    set(h,'String',power);
-    
-    % Activly plot the power data (comment line to stop active graphing)
-    plot(handles.time_stamp(1, :),handles.power_data(2, :));
-
-    % Take into account backlash for these data points
-    handles.pos_command_with_backlash(end + 1,1) = eval(get(handles.screw_pos_1, 'String'));
-    handles.pos_command_with_backlash(end,2) = eval(get(handles.screw_pos_2, 'String'));
-    handles.pos_command_with_backlash(end,3) = eval(get(handles.screw_pos_3, 'String'));
-    handles.pos_command_with_backlash(end,4) = eval(get(handles.screw_pos_1_2, 'String'));
-    handles.pos_command_with_backlash(end,5) = eval(get(handles.screw_pos_2_2, 'String'));
-    handles.pos_command_with_backlash(end,6) = eval(get(handles.screw_pos_3_2, 'String'));
-    
-    % Read the desired number of data bytes
-    data = fgets(handles.objs(1));
-    data_2 = fgets(handles.objs(2));
-    values=handles.position_data;
-    data_1 = data(1:length(data)-9);
-    %data_to_save = data_2(1:length(data_2) - 9);
-    handles.position_data{length(values)+1}=[data_1, ' ', data_2];
-
-    % Assembly 1
-    dataarray = strsplit(data,char(9));
-    if length(dataarray)>=14,
-        h=findobj(handles.guiserial,'Tag','Pos1Set');
-        set(h,'String',dataarray{1});
-        h=findobj(handles.guiserial,'Tag','Pos1');
-        set(h,'String',dataarray{2});
-        h=findobj(handles.guiserial,'Tag','MotorCommand1');
-        set(h,'String',dataarray{3});
-        h=findobj(handles.guiserial,'Tag','IntErr1');
-        set(h,'String',dataarray{4});
-        h=findobj(handles.guiserial,'Tag','Pos2Set');
-        set(h,'String',dataarray{5});
-        h=findobj(handles.guiserial,'Tag','Pos2');
-        set(h,'String',dataarray{6});
-        h=findobj(handles.guiserial,'Tag','MotorCommand2');
-        set(h,'String',dataarray{7});
-        h=findobj(handles.guiserial,'Tag','IntErr2');
-        set(h,'String',dataarray{8});
-        h=findobj(handles.guiserial,'Tag','Pos3Set');
-        set(h,'String',dataarray{9});
-        h=findobj(handles.guiserial,'Tag','Pos3');
-        set(h,'String',dataarray{10});
-        h=findobj(handles.guiserial,'Tag','MotorCommand3');
-        set(h,'String',dataarray{11});
-        h=findobj(handles.guiserial,'Tag','IntErr3');
-        set(h,'String',dataarray{12});
-        h=findobj(handles.guiserial,'Tag','is_error');
-        set(h,'String',dataarray{14});
-    end
-    
-    % Assembly 2
-    dataarray = strsplit(data_2,char(9));
-    if length(dataarray)>=14,
-        h=findobj(handles.guiserial,'Tag','Pos1Set_2');
-        set(h,'String',dataarray{1});
-        h=findobj(handles.guiserial,'Tag','Pos1_2');
-        set(h,'String',dataarray{2});
-        h=findobj(handles.guiserial,'Tag','MotorCommand1_2');
-        set(h,'String',dataarray{3});
-        h=findobj(handles.guiserial,'Tag','IntErr1_2');
-        set(h,'String',dataarray{4});
-        h=findobj(handles.guiserial,'Tag','Pos2Set_2');
-        set(h,'String',dataarray{5});
-        h=findobj(handles.guiserial,'Tag','Pos2_2');
-        set(h,'String',dataarray{6});
-        h=findobj(handles.guiserial,'Tag','MotorCommand2_2');
-        set(h,'String',dataarray{7});
-        h=findobj(handles.guiserial,'Tag','IntErr2_2');
-        set(h,'String',dataarray{8});
-        h=findobj(handles.guiserial,'Tag','Pos3Set_2');
-        set(h,'String',dataarray{9});
-        h=findobj(handles.guiserial,'Tag','Pos3_2');
-        set(h,'String',dataarray{10});
-        h=findobj(handles.guiserial,'Tag','MotorCommand3_2');
-        set(h,'String',dataarray{11});
-        h=findobj(handles.guiserial,'Tag','IntErr3_2');
-        set(h,'String',dataarray{12});
-        
-    end
-end
-
-disp('data read')
-guidata(fighandle,handles);
 
 
 %% --- Executes on slider movement.
@@ -999,10 +1086,6 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 
-
-% --- Executes on button press in spoof_power.
-function spoof_power_Callback(hObject, eventdata, handles)
-
 % Function to get the setpoints based on current data
 function return_this = get_next_setpoints(handles)
 
@@ -1043,31 +1126,3 @@ catch
     handles.position_setpoints(end+1, :) = [0, pos];
 end
 guidata(fighandle,handles)
-
-%{
-EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
-
-set(handles.screw_pos_1, 'String', pos(1) * EncoderScaling);
-fprintf(handles.objs(1),'%s\n',['P1',int2str(pos(1))]);
-pause(.015)
-
-set(handles.screw_pos_2, 'String', pos(2) * EncoderScaling);
-fprintf(handles.objs(1),'%s\n',['P2',int2str(pos(2))]);
-pause(.015)
-
-set(handles.screw_pos_3, 'String', pos(3) * EncoderScaling);
-fprintf(handles.objs(1),'%s\n',['P3',int2str(pos(3))]);
-pause(.015)
-
-set(handles.screw_pos_1_2, 'String', pos(4) * EncoderScaling);
-fprintf(handles.objs(2),'%s\n',['P1',int2str(pos(4))]);
-pause(.015)
-
-set(handles.screw_pos_2_2, 'String', pos(5) * EncoderScaling);
-fprintf(handles.objs(2),'%s\n',['P2',int2str(pos(5))]);
-pause(.015)
-
-set(handles.screw_pos_3_2, 'String', pos(6) * EncoderScaling);
-fprintf(handles.objs(2),'%s\n',['P3',int2str(pos(6))]);
-pause(.015)
-%}
