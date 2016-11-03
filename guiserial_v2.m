@@ -116,6 +116,7 @@ switch(v)
 % If case(1), all conenctions are closed, so open Arduino COM conncetions
 % and OPHIR laser connection
 case(1)
+        
     
     % Ensure the button states always match
     set(handles.startbutton_no_file, 'Value', 1);
@@ -127,6 +128,7 @@ case(1)
         handles.position_setpoints = load('test_data.txt');
     end
     handles.index = 2;
+        
     
     disp('Opening Arduino Connections: Starting timer object')
     % Make sure there is no connection over the USB for all COMS.
@@ -164,7 +166,11 @@ case(1)
     %    make_snug(i, handles);
     %end
     
-    handles = open_laser_connections(hObject, handles);
+    [handles, ok] = open_laser_connections(hObject, handles);
+    
+    if (~ok)
+        return
+    end
     
     handles.power_data=[];
     handles.Value = [];
@@ -250,39 +256,23 @@ end
 % Save changes made to handles
 guidata(hObject,handles);
 
-function [handles] = open_laser_connections(hObject, handles)
-do_new = true;
+function [handles, is_ok] = open_laser_connections(hObject, handles)
+is_ok = true;
 
-if (do_new)
-    % Open the laser connections first (fail if unable to open)
-    if (1)%(~handles.fake_power) %TODO: Figure out why this line is slow when faking power data
-        %% Start the laser connections and start retrieving data
-        try
-            disp('Opening laser connections');
-            ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
-            % Use some of the methods of the object to modify some settings, do some
-            % initialisation etc
-            % Request the object scans for USB devices:
-            SerialNumbers = ophirApp.ScanUSB;
-            if(isempty(SerialNumbers))
-                disp ('No USB devices seem to be connected. Please check and try again',...
-                        'Ophir Measurement COM interface: ScanUSB error')
-            end
-        catch COM_error
-            disp(COM_error.message);
-            %error('Could not establish a link to OphirLMMeasurement');
-            %if (~handles.fake_power)
-            %disp 'No laser connection detected. Please use the Start (fake_power).'
-            %set(handles.startbutton, 'Value', 0);
-            %set(handles.startbutton_no_file, 'Value', 0);
-            %set(handles.startbutton_fake_power, 'Value', 0);
-
-            %return
-            %end
+% Open the laser connections first (fail if unable to open)
+if (1)%(~handles.fake_power) %TODO: Figure out why this line is slow when faking power data
+    %% Start the laser connections and start retrieving data
+    try
+        disp('Opening laser connections');
+        ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
+        % Use some of the methods of the object to modify some settings, do some
+        % initialisation etc
+        % Request the object scans for USB devices:
+        SerialNumbers = ophirApp.ScanUSB;
+        if(isempty(SerialNumbers))
+            disp ('No USB devices seem to be connected. Please check and try again',...
+                    'Ophir Measurement COM interface: ScanUSB error')
         end
-    end
-
-    if (~handles.fake_power)
         % Open the first USB device found:
         h_USB = ophirApp.OpenUSBDevice(SerialNumbers{1});
 
@@ -290,36 +280,33 @@ if (do_new)
         ophirApp.StartStream(h_USB(1),0);
         handles.ophir_app = ophirApp;
         handles.open_USB = h_USB;
-    end
 
-else
-
-    %% Start the laser connections and start retrieving data
-    try
-        disp('Opening laser connections');
-        ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
     catch COM_error
-        disp(COM_error.message);
-        error('Could not establist a link to OphirLMMeasurement');
+        %disp(COM_error.message);
+        %error('Could not establish a link to OphirLMMeasurement');
+        if (~handles.fake_power)
+            disp 'No laser connection detected. Please use the Start (fake_power).'
+            set(handles.startbutton, 'Value', 0);
+            set(handles.startbutton_no_file, 'Value', 0);
+            set(handles.startbutton_fake_power, 'Value', 0);
+
+            % Close the arduino connections
+            for i = 1:length(handles.objs)
+                obj=handles.objs(i);
+                if ~isempty(obj),
+                    if(strcmp(get(obj,'Status'),'open'))
+                      fclose(obj);
+                    end
+                end
+            end
+
+            % Save changes made to handles
+            guidata(hObject,handles);
+            is_ok = false;
+        end
     end
-
-    % Use some of the methods of the object to modify some settings, do some
-    % initialisation etc
-    % Request the object scans for USB devices:
-    SerialNumbers = ophirApp.ScanUSB;
-    if(isempty(SerialNumbers))
-        warndlg('No USB devices seem to be connected. Please check and try again',...
-                'Ophir Measurement COM interface: ScanUSB error')
-    end
-
-    % Open the first USB device found:
-    h_USB = ophirApp.OpenUSBDevice(SerialNumbers{1});
-
-    % Instruct the sensor to start streaming measurements on the first channel:
-    ophirApp.StartStream(h_USB(1),0);
-    handles.ophir_app = ophirApp;
-    handles.open_USB = h_USB;
 end
+
 % Save changes made to handles
 guidata(hObject,handles);
 
