@@ -1,15 +1,3 @@
-%{
-Notes:
-TODO: Function that takes power and positions as an input and 
-outputs next set the position (CONTROLLER FUNCTION)
-
-
-TODO: Option to 'fake' power data. Option to read from Ophir or to fake power
-data
-UPDATE: Done, called spoof_power(), but right now looks at set points. For
-real data, change 'Pos1Set' to 'Pos1', etc. for all positions.
-
-%}
 function varargout = guiserial_v2(varargin)
 % GUISERIAL_V2 MATLAB code for guiserial_v2.fig
 %      GUISERIAL_V2, by itself, creates a new GUISERIAL_V2 or raises the existing
@@ -117,7 +105,6 @@ switch(v)
 % and OPHIR laser connection
 case(1)
         
-    
     % Ensure the button states always match
     set(handles.startbutton_no_file, 'Value', 1);
     set(handles.startbutton_fake_power, 'Value', 1);
@@ -128,30 +115,18 @@ case(1)
         handles.position_setpoints = load('test_data.txt');
     end
     handles.index = 2;
-        
     
-    disp('Opening Arduino Connections: Starting timer object')
-    % Make sure there is no connection over the USB for all COMS.
-    % (This should only execute if there was an error on the previous run)
-    for i = 1:length(handles.COMS)
-        if (~isempty(instrfind('Port',handles.COMS(i))))
-            disp 'Closing irrelavent connections'
-            x=instrfind('Port',handles.COMS(i));
-            fclose(x);
-        end
-    end
+    % Open the arduino connections
+    handles = open_arduino_connections(handles);
     
-    % Add a COMS object for every COM listed
-    for i = 1:length(handles.COMS)
-        obj = serial(handles.COMS(i), 'BaudRate', 115200 ,'Timeout',.015);
-        obj.terminator = char(10);
-        handles.objs(i) = obj;
-        fopen(handles.objs(i));
+    % Open the laser connections
+    [handles, ok] = open_laser_connections(hObject, handles);
+    pause (.5)
+    if (~ok)
+        return
     end
     
     % Make a timer that executes every .5 seconds
-    % TODO: tinker with period to stop GUI gettign overwritten by active
-    % plotting
     t = timer('ExecutionMode', 'fixedRate', 'Period', .5);
     t.TimerFcn = { @timer_callback, handles.guiserial };
     handles.timer = t;
@@ -161,17 +136,11 @@ case(1)
     handles.position_data = [];
     handles.pos_command_with_backlash = [];
     
-    %% Make the motos snug against the bolt
+    % Make the motos snug against the bolt
     %for i = 1:3
     %    make_snug(i, handles);
     %end
-    
-    [handles, ok] = open_laser_connections(hObject, handles);
-    
-    if (~ok)
-        return
-    end
-    
+
     handles.power_data=[];
     handles.Value = [];
     handles.Timestamp = [];
@@ -195,121 +164,158 @@ case(0)
     set(handles.startbutton_fake_power, 'Value', 0);
     
     %% Do all the arduino bookkeeping
-    disp('Closing Arduino Connections')
+    handles = close_arduino_connections(handles);
     
-    % Close the arduino connection if it is active
-    for i = 1:length(handles.objs)
-        obj=handles.objs(i);
-        if ~isempty(obj),
-            if(strcmp(get(obj,'Status'),'open'))
-              fclose(obj);
-            end
-        end
-    end
-    
-    % Outputs the data to a new file of the name 'log_runX.txt' where x
-    % makes the file_name unique
-    counter = 1;
-    while (exist(['log_run', int2str(counter), '.txt']) == 2)
-        counter = counter + 1;
-    end
-    fileID = fopen(['log_run', int2str(counter), '.txt'], 'w');
-    [~,nrows] = size(handles.position_data);
-    for row = 1:nrows
-        if (~isempty(handles.position_data{1,row}))
-            fprintf(fileID,'%5.2f\t', handles.time_stamp(1, row));
-            fprintf(fileID,'%3.5f\t',handles.power_data(2, row));
-            %fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
-            fprintf(fileID,'%s', handles.position_data{1,row});
-        end
-    end
-    fclose(fileID);
-    disp(['Output to file: log_run', int2str(counter), '.txt']);
+    %% Save the data
+    write_to_file(handles)
     
     %% Do all the laser bookeeping
-    if (~handles.fake_power)
-        disp('Closing laser connections');
-        ophir_app=handles.ophir_app;
-        if ~isempty(ophir_app),
-            % Close the laser connections
-            ophir_app.StopAllStreams;
-            ophir_app.CloseAll;
-            ophir_app.delete;
-            clear ophir_app
-        end
-    end
-    
-    %Plot the laser data (Commented because of active_plotting)
-    %data_log = load(['log_run', int2str(counter), '.txt']);
-    %if (~isempty(data_log))
-    %    figure; plot(data_log(:, 1),data_log(:,2))
-    %end
+    handles = close_laser_connections(handles);
     
     %Delete the timer
-    delete(handles.timer);
-    clear('handles.timer');
+    handles = delete_timer(handles);
     
     % Ensure this bool is default (for proper operation)
     handles.read_from_file = true;
+    handles.fake_power = false;
 end
 
 % Save changes made to handles
 guidata(hObject,handles);
+
+
+%% Writes the run data to a file
+function write_to_file(handles)
+% Outputs the data to a new file of the name 'log_runX.txt' where x
+% makes the file_name unique
+counter = 1;
+while (exist(['log_run', int2str(counter), '.txt']) == 2)
+    counter = counter + 1;
+end
+fileID = fopen(['log_run', int2str(counter), '.txt'], 'w');
+[~,nrows] = size(handles.position_data);
+for row = 1:nrows
+    if (~isempty(handles.position_data{1,row}))
+        fprintf(fileID,'%5.2f\t', handles.time_stamp(1, row));
+        fprintf(fileID,'%3.5f\t',handles.power_data(2, row));
+        %fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
+        fprintf(fileID,'%s', handles.position_data{1,row});
+    end
+end
+fclose(fileID);
+disp(['Output to file: log_run', int2str(counter), '.txt']);
+
+%% Open arduino connections
+function [handles] = open_arduino_connections(handles)
+
+disp('Opening Arduino Connections: Starting timer object')
+
+% Make sure there is no connection over the USB for all COMS.
+% (This should only execute if there was an error on the previous run)
+for i = 1:length(handles.COMS)
+    if (~isempty(instrfind('Port',handles.COMS(i))))
+        disp 'Closing irrelavent connections'
+        x=instrfind('Port',handles.COMS(i));
+        fclose(x);
+    end
+end
+%{
+% Add a COMS object for every COM listed
+for i = 1:length(handles.COMS)
+    obj = serial(handles.COMS(i), 'BaudRate', 115200 ,'Timeout',.015);
+    obj.terminator = char(10);
+    handles.objs(i) = obj;
+    fopen(handles.objs(i));
+end
+%}
+% Open all COM objects
+obj = serial(handles.COMS(1), 'BaudRate', 115200 ,'Timeout',.015);
+obj.terminator = char(10);
+handles.objs(1) = obj;
+fopen(handles.objs(1));
+obj = serial(handles.COMS(2), 'BaudRate', 115200 ,'Timeout',.015);
+obj.terminator = char(10);
+handles.objs(2) = obj;
+fopen(handles.objs(2));
 
 function [handles, is_ok] = open_laser_connections(hObject, handles)
 is_ok = true;
 
 % Open the laser connections first (fail if unable to open)
-if (1)%(~handles.fake_power) %TODO: Figure out why this line is slow when faking power data
-    %% Start the laser connections and start retrieving data
-    try
-        disp('Opening laser connections');
-        ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
-        % Use some of the methods of the object to modify some settings, do some
-        % initialisation etc
-        % Request the object scans for USB devices:
-        SerialNumbers = ophirApp.ScanUSB;
-        if(isempty(SerialNumbers))
-            disp ('No USB devices seem to be connected. Please check and try again',...
-                    'Ophir Measurement COM interface: ScanUSB error')
-        end
-        % Open the first USB device found:
-        h_USB = ophirApp.OpenUSBDevice(SerialNumbers{1});
+%% Start the laser connections and start retrieving data
+try
+    disp('Opening laser connections');
+    ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
+    % Use some of the methods of the object to modify some settings, do some
+    % initialisation etc
+    % Request the object scans for USB devices:
+    SerialNumbers = ophirApp.ScanUSB;
+    if(isempty(SerialNumbers))
+        disp ('No USB devices seem to be connected. Please check and try again',...
+                'Ophir Measurement COM interface: ScanUSB error')
+    end
+    % Open the first USB device found:
+    h_USB = ophirApp.OpenUSBDevice(SerialNumbers{1});
 
-        % Instruct the sensor to start streaming measurements on the first channel:
-        ophirApp.StartStream(h_USB(1),0);
-        handles.ophir_app = ophirApp;
-        handles.open_USB = h_USB;
+    % Instruct the sensor to start streaming measurements on the first channel:
+    ophirApp.StartStream(h_USB(1),0);
+    handles.ophir_app = ophirApp;
+    handles.open_USB = h_USB;
 
-    catch COM_error
-        %disp(COM_error.message);
-        %error('Could not establish a link to OphirLMMeasurement');
-        if (~handles.fake_power)
-            disp 'No laser connection detected. Please use the Start (fake_power).'
-            set(handles.startbutton, 'Value', 0);
-            set(handles.startbutton_no_file, 'Value', 0);
-            set(handles.startbutton_fake_power, 'Value', 0);
+catch COM_error
+    %disp(COM_error.message);
+    %error('Could not establish a link to OphirLMMeasurement');
+    if (~handles.fake_power)
+        disp 'No laser connection detected. Please use the Start (fake_power).'
+        set(handles.startbutton, 'Value', 0);
+        set(handles.startbutton_no_file, 'Value', 0);
+        set(handles.startbutton_fake_power, 'Value', 0);
 
-            % Close the arduino connections
-            for i = 1:length(handles.objs)
-                obj=handles.objs(i);
-                if ~isempty(obj),
-                    if(strcmp(get(obj,'Status'),'open'))
-                      fclose(obj);
-                    end
-                end
-            end
+        % Close the arduino connections
+        handles = close_arduino_connections(handles);
 
-            % Save changes made to handles
-            guidata(hObject,handles);
-            is_ok = false;
-        end
+        % Save changes made to handles
+        guidata(hObject,handles);
+        is_ok = false;
     end
 end
 
 % Save changes made to handles
 guidata(hObject,handles);
 
+function [handles] = close_arduino_connections(handles)
+disp('Closing Arduino Connections')
+    
+% Close the arduino connection if it is active
+for i = 1:length(handles.objs)
+    obj=handles.objs(i);
+    if ~isempty(obj),
+        if(strcmp(get(obj,'Status'),'open'))
+          fclose(obj);
+        end
+    end
+end
+
+%% Close all existing laser connections
+function [handles] = close_laser_connections(handles)
+disp('Closing laser connections');
+try
+    ophir_app=handles.ophir_app;
+    if ~isempty(ophir_app),
+        % Close the laser connections
+        ophir_app.StopAllStreams;
+        ophir_app.CloseAll;
+        ophir_app.delete;
+        clear ophir_app
+    end
+catch COM_error
+    
+end
+
+%% Delete the timer
+function [handles] = delete_timer(handles)
+delete(handles.timer);
+clear('handles.timer');
 
 %% --- Executes on button press in startbutton_no_file.
 function startbutton_no_file_Callback(hObject, ~, handles)
@@ -348,7 +354,6 @@ case(0)
     set(handles.startbutton_no_file, 'Value', 0);
 end
 
-
 % Update handles structure
 guidata(hObject, handles);
 
@@ -357,7 +362,6 @@ startbutton_Callback(hObject, [], handles);
 
 %% Executes every period (.5 by default) when either 'Start' button is pressed
 function timer_callback(~,~,fighandle)
-
 try
     % Grab the figure handle
     handles=guidata(fighandle);
@@ -455,11 +459,13 @@ try
     if (get(handles.calc_next_pos,'Value') == 1)
         % Comment this try catch if you like, it is copied from writ_next_positions
         try
-            pos = get_next_setpoints(handles);
-            handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos];
+            %pos = get_next_setpoints(handles);
+            pos = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')));
+            filler = [0,0,0,0];
+            handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos', filler];
         catch
             pos = get_next_setpoints(handles);
-            handles.position_setpoints(end+1, :) = [0, pos];
+            handles.position_setpoints(end+1, :) = [0, pos, filler];
         end
         %write_next_positions(fighandle, handles, get_next_setpoints(handles));
     end
@@ -469,10 +475,11 @@ try
         [handles.Value, handles.Timestamp, ~] = handles.ophir_app.GetData(handles.open_USB(1),0);
     else
         % Don't read from the laser
-        handles.Value = spoof_power(handles);
+        %handles.Value = spoof_power(handles);
+        handles.Value = laser_model(get_current_position(handles));
         handles.Timestamp = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
     end
-    
+
     %Check to see if the laser value is valid (Ensure the number of data points
     %is consistent
     if (~isempty(handles.Value))
@@ -489,7 +496,6 @@ try
             handles.power_data(2,end+1) = handles.Value(end); %Only log the last sample
             handles.power_data(1,end) = handles.Timestamp(end); %Only log the last timestamp
         end
-
         % Update the GUI laser_power object
         h=findobj(handles.guiserial,'Tag','laser_power');
         set(h,'String',handles.Value(end));
@@ -574,7 +580,8 @@ try
     end
     disp('data read')
     guidata(fighandle,handles);
-catch
+catch me
+    %me
     disp 'If this message shows up once, ignore it.'
 end
 
@@ -1113,3 +1120,51 @@ catch
     handles.position_setpoints(end+1, :) = [0, pos];
 end
 guidata(fighandle,handles)
+
+%% Dr. Vincent's functions
+
+% Makse fake power data based on current positions
+function p = laser_model(pos)
+pos = pos(1,1:2)';
+c = [0;0];
+sigma=sqrt(100)*pi/180;
+P=10;
+noise_sigma=.1;
+p = P*exp(-0.5*norm(pos-c,2).^2/sigma^2)+noise_sigma*randn(1);
+
+function [thetaout] = simultaneous_perturbation_stochastic_approximation(power)
+p=2; % dimension of search space
+persistent k
+persistent theta
+persistent delta
+persistent yplus
+a=10;
+c=10;
+A=1;
+alpha=.6;
+gamma=.6;
+startflag=0;
+
+if (isempty(theta) || isempty(yplus)), 
+    startflag=1;
+    theta=[-2;-1]; 
+    k=0;
+end;
+
+if (mod(k,2) == 0)
+    yminus = power;
+    if (startflag==0),
+        ck=c/k^gamma;
+        ak=a/(k+A)^alpha;
+        ghat = (yplus - yminus)./(2*ck*delta);
+        theta = theta + ak*ghat;
+    end
+    k=k+1;
+    ck=c/k^gamma;
+    delta = 2*ck*round(rand(p,1))-1;
+    thetaout = theta + delta;
+else
+    yplus = power;
+    thetaout = theta - delta;
+end
+
