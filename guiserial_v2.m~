@@ -1140,17 +1140,14 @@ persistent k
 persistent theta
 persistent delta
 persistent yplus
-a=10*pi/180;
-c=10*pi/180;
+a=10;
+c=10;
 A=1;
 alpha=.6;
 gamma=.6;
 startflag=0;
 
-%
-% power<0 indicates this is the first time this function has been called
-%
-if (power<0), 
+if (isempty(theta) || isempty(yplus)), 
     theta=[0;0];
     yplus=0;
     k=0;
