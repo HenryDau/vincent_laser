@@ -57,6 +57,7 @@ function guiserial_v2_OpeningFcn(hObject, ~, handles, varargin)
 % Choose default command line output for guiserial_v2
 handles.output = hObject;
 handles.COMS = {'COM6', 'COM7'};
+%handles.COMS = {'/dev/cu.usbmodem1411', '/dev/cu.usbmodem1421'}
 set(handles.Motor1Slider,'SliderStep',[1/1440 10/1440])
 set(handles.Motor2Slider,'SliderStep',[1/1440 10/1440])
 set(handles.Motor3Slider,'SliderStep',[1/1440 10/1440])
