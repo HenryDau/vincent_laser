@@ -64,8 +64,8 @@ function guiserial_v2_OpeningFcn(hObject, ~, handles, varargin)
 
 % Choose default command line output for guiserial_v2
 handles.output = hObject;
-%handles.COMS = {'COM6', 'COM7'};
-handles.COMS = {'/dev/cu.usbmodem1411', '/dev/cu.usbmodem1421'}
+handles.COMS = {'COM6', 'COM7'};
+%handles.COMS = {'/dev/cu.usbmodem1411', '/dev/cu.usbmodem1421'};
 set(handles.Motor1Slider,'SliderStep',[1/1440 10/1440])
 set(handles.Motor2Slider,'SliderStep',[1/1440 10/1440])
 set(handles.Motor3Slider,'SliderStep',[1/1440 10/1440])
@@ -154,6 +154,7 @@ case(1)
     handles.power_data=[];
     handles.Value = [];
     handles.Timestamp = [];
+    handles.timeout_delay = 4;
     
     % Make a new figure for graphing during operation
     figure;
@@ -466,7 +467,9 @@ try
         pause(.015);
     end
 
-    if (get(handles.calc_next_pos,'Value') == 1)
+
+    if ((get(handles.calc_next_pos,'Value') == 1 ) && ...
+            mod(handles.timer.TasksExecuted, handles.timeout_delay) == 0)
         % Comment this try catch if you like, it is copied from writ_next_positions
         try
             %pos = get_next_setpoints(handles);
@@ -1122,14 +1125,26 @@ positions = [current_pos1, current_pos2, current_pos3, ...
 function calc_next_pos_Callback(hObject, eventdata, handles)
 % Hint: get(hObject,'Value') returns toggle state of checkbox6
 
+if (get(hObject,'Value') == 1)
+    try
+        data_points = simultaneous_perturbation_stochastic_approximation(-1);
+        set(handles.Pos1Set, 'String', data_points(1));
+        set(handles.Pos2Set, 'String', data_points(2));
+    catch
+        disp 'Check this box after the program starts running'
+        set(handles.calc_next_pos, 'Value', 0);
+    end
+end
+
+
 % Writes the current screw position for setting next position
-function write_next_positions(fighandle, handles, pos)
+function [handles] = write_next_positions(handles, pos)
 try
     handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos];
 catch
     handles.position_setpoints(end+1, :) = [0, pos];
 end
-guidata(fighandle,handles)
+
 
 %% Dr. Vincent's functions
 
@@ -1143,6 +1158,8 @@ noise_sigma=.1;
 p = P*exp(-0.5*norm(pos-c,2).^2/sigma^2)+noise_sigma*randn(1);
 
 function [thetaout] = simultaneous_perturbation_stochastic_approximation(power)
+%thetaout = [1 + power / 3; 1+ power / 3];
+%return;
 p=2; % dimension of search space
 persistent k
 persistent theta
@@ -1188,7 +1205,4 @@ else
     yplus = power;
     thetaout = theta - delta;
 end
-theta
-yminus
-yplus
 
