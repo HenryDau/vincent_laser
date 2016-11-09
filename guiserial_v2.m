@@ -1,3 +1,11 @@
+%{
+TODO: Call the stochastic from the get_next_setpoints callback, initialize
+with negative power 
+
+Add variable called "timeout_delays". Changes how often
+the position is updated.
+
+%}
 function varargout = guiserial_v2(varargin)
 % GUISERIAL_V2 MATLAB code for guiserial_v2.fig
 %      GUISERIAL_V2, by itself, creates a new GUISERIAL_V2 or raises the existing
@@ -121,8 +129,9 @@ case(1)
     handles = open_arduino_connections(handles);
     
     % Open the laser connections
+    pause (1)
     [handles, ok] = open_laser_connections(hObject, handles);
-    pause (.5)
+    pause (1)
     if (~ok)
         return
     end
