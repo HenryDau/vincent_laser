@@ -474,11 +474,21 @@ try
         try
             %pos = get_next_setpoints(handles);
             pos = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')));
-            filler = [0,0,0,0];
-            handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos', filler];
+            %filler = [0,0,0,0];
+            pause(.015)
+            fprintf(handles.objs(2),'%s\n',['P1',int2str(pos(1))]);
+            pause(.015)
+            fprintf(handles.objs(2),'%s\n',['P2',int2str(pos(2))]);
+            pause(.015)
+            %handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos', filler];
         catch
             pos = get_next_setpoints(handles);
-            handles.position_setpoints(end+1, :) = [0, pos, filler];
+            pause(.015)
+            fprintf(handles.objs(2),'%s\n',['P1',int2str(pos(1))]);
+            pause(.015)
+            fprintf(handles.objs(2),'%s\n',['P2',int2str(pos(2))]);
+            pause(.015)
+            %handles.position_setpoints(end+1, :) = [0, pos, filler];
         end
         %write_next_positions(fighandle, handles, get_next_setpoints(handles));
     end
@@ -1129,10 +1139,12 @@ if (get(hObject,'Value') == 1)
     try
         data_points = simultaneous_perturbation_stochastic_approximation(-1);
         set(handles.Pos1Set, 'String', data_points(1));
-        set(handles.Pos2Set, 'String', data_points(2));
+        set(handles.Pos2Set, 'String', data_points(2));       
     catch
         disp 'Check this box after the program starts running'
         set(handles.calc_next_pos, 'Value', 0);
+        set(handles.Pos1Set, 'String', data_points(1));
+        set(handles.Pos2Set, 'String', data_points(2));
     end
 end
 
