@@ -1,11 +1,3 @@
-%{
-TODO: Call the stochastic from the get_next_setpoints callback, initialize
-with negative power 
-
-Add variable called "timeout_delays". Changes how often
-the position is updated.
-
-%}
 function varargout = guiserial_v2(varargin)
 % GUISERIAL_V2 MATLAB code for guiserial_v2.fig
 %      GUISERIAL_V2, by itself, creates a new GUISERIAL_V2 or raises the existing
@@ -226,6 +218,15 @@ function timer_callback(~,~,fighandle)
 try
     % Grab the figure handle
     handles=guidata(fighandle);
+    
+    % Update the position setpoints if needed
+    if ((get(handles.calc_next_pos,'Value') == 1 ) && ...
+        mod(handles.timer.TasksExecuted, handles.timeout_delay) == 0)
+    
+        % Update positions because the flag is set
+        handles = update_positions(handles);
+        handles.position_setpoints
+    end
 
     % If there are more rows than the current index
     [nrows, ~] = size(handles.position_setpoints);
@@ -238,6 +239,7 @@ try
                 < (handles.timer.TasksExecuted * handles.timer.AveragePeriod))
             handles.index = handles.index + 1;
         end
+        
         %
         % Write new positions to the motors
         %
@@ -267,23 +269,6 @@ try
         % Write to motor 3 assembly 2
         write_to_arduino_with_backlash(handles.screw_pos_3_2, handles.backlash_3_2, ...
             handles, 2, 3, 7);
-    end
-
-
-    if ((get(handles.calc_next_pos,'Value') == 1 ) && ...
-            mod(handles.timer.TasksExecuted, handles.timeout_delay) == 0)
-        % Comment this try catch if you like, it is copied from writ_next_positions
-        try
-            disp 'Updating positions'
-            %pos = get_next_setpoints(handles);
-            pos = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')));
-            pos
-            filler = [0,0,0,0];
-            handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos', filler];
-        catch
-            pos = get_next_setpoints(handles);
-            handles.position_setpoints(end+1, :) = [0, pos];
-        end
     end
 
     if (~handles.fake_power)
@@ -401,6 +386,21 @@ catch me
     disp 'If this message shows up once, ignore it.'
 end
 
+%% Function to update positions of the motor based on power changes
+function [handles] = update_positions(handles)
+% Comment this try catch if you like, it is copied from writ_next_positions
+try
+    disp 'Updating positions'
+    %pos = get_next_setpoints(handles);
+    pos = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')));
+    filler = [0,0,0,0];
+    EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+    handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos' / EncoderScaling, filler];
+catch
+    pos = get_next_setpoints(handles);
+    handles.position_setpoints(end+1, :) = [0, pos];
+end
+
 %% Function to get the setpoints based on current data
 function return_this = get_next_setpoints(handles)
 
@@ -428,7 +428,7 @@ end
 positions = [current_pos1, current_pos2, current_pos3, ...
     current_pos1_2, current_pos2_2, current_pos3_2];
 
-%{
+
 %% --- Executes on button press in calc_next_pos.
 function calc_next_pos_Callback(hObject, eventdata, handles)
 % Hint: get(hObject,'Value') returns toggle state of checkbox6
@@ -445,7 +445,7 @@ if (get(hObject,'Value') == 1)
         set(handles.Pos2Set, 'String', data_points(2));
     end
 end
-%}
+
 
 %% Write to an arduino using backlash data
 function write_to_arduino_with_backlash(object, object2, handles, port, motor, value_index)
