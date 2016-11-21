@@ -1,29 +1,58 @@
-function [thetaplus,thetaminus] = simultaneous_perturbation_stochastic_approximation(yplus,yminus)
+function [thetaout] = simultaneous_perturbation_stochastic_approximation(power)
+%thetaout = [1 + power / 3; 1+ power / 3];
+%return;
 p=2; % dimension of search space
 persistent k
 persistent theta
 persistent delta
-a=10;
-c=10;
+persistent yplus
+persistent ck
+a=.5*pi/180;
+c=5*pi/180;
 A=1;
 alpha=.6;
 gamma=.6;
 startflag=0;
-if (isempty(theta) | isempty(yplus)), 
-    startflag=1;
-    theta=[-20;-10]; 
-    k=0
-end;
+yminus=0;
 
-if (startflag==0),
-    ck=c/k^gamma;
+%
+% power<0 indicates this is the first time this function has been called
+%
+if (power<0), 
+    disp('Search Initialized')
+    theta=[0;0];
+    yplus=0;
+    k=0;
+    ck=c/(k+1)^gamma;
+    delta = ck*(2*round(rand(p,1))-1);
+    thetaout = theta + delta;
+    return;
+end;
+k=k+1
+if (mod(k,2) == 0)
+    yminus = power;
+%
+% Update theta
+%
     ak=a/(k+A)^alpha;
-    ghat = (yplus - yminus)./(2*ck*delta);
+    ghat = (yplus - yminus)./delta;
     theta = theta + ak*ghat;
-end;
-k=k+1;
-ck=c/k^gamma;
-delta = 2*round(rand(p,1))-1;
-thetaplus = theta + ck*delta;
-thetaminus = theta - ck*delta;
+%
+% Update thetaout
+% 
+    ck=c/k^gamma;
+    delta = ck*(2*round(rand(p,1))-1);
+    thetaout = theta + delta;
 
+else
+    yplus = power;
+    thetaout = theta - delta;
+end
+%theta
+%thetaout
+%delta
+%ck
+%ak
+%yplus
+%yminus
+%ghat

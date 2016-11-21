@@ -1,3 +1,13 @@
+%{
+TODO: Confirm unit conversion is correct (minimize EncdoerScaling)
+
+3. Ensure scan code is working correctly (read from file)
+
+1. Run from power supplys instead of batteries
+
+2. Move everything into the boxes
+
+%}
 function varargout = guiserial_v2(varargin)
 % GUISERIAL_V2 MATLAB code for guiserial_v2.fig
 %      GUISERIAL_V2, by itself, creates a new GUISERIAL_V2 or raises the existing
@@ -225,7 +235,7 @@ try
     
         % Update positions because the flag is set
         handles = update_positions(handles);
-        handles.position_setpoints
+        %handles.position_setpoints
     end
 
     % If there are more rows than the current index
@@ -302,6 +312,7 @@ try
         set(h,'String',handles.Value(end));
 
         % Activly plot the power data (comment line to stop active graphing)
+        figure(1);
         plot(handles.time_stamp(1, :),handles.power_data(2, :));
 
         % Take into account backlash for these data points
@@ -390,15 +401,16 @@ end
 function [handles] = update_positions(handles)
 % Comment this try catch if you like, it is copied from writ_next_positions
 try
-    disp 'Updating positions'
+    disp 'Updating position'
     %pos = get_next_setpoints(handles);
     pos = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')));
     filler = [0,0,0,0];
     EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
     handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos' / EncoderScaling, filler];
 catch
-    pos = get_next_setpoints(handles);
-    handles.position_setpoints(end+1, :) = [0, pos];
+    disp 'Wrong position updater used'
+    %pos = get_next_setpoints(handles);
+    %handles.position_setpoints(end+1, :) = [0, pos];
 end
 
 %% Function to get the setpoints based on current data
@@ -435,14 +447,15 @@ function calc_next_pos_Callback(hObject, eventdata, handles)
 
 if (get(hObject,'Value') == 1)
     try
-        data_points = simultaneous_perturbation_stochastic_approximation(-1);
+        EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+        data_points = simultaneous_perturbation_stochastic_approximation(-1) / EncoderScaling;
         set(handles.Pos1Set, 'String', data_points(1));
-        set(handles.Pos2Set, 'String', data_points(2));       
+        set(handles.Pos2Set, 'String', data_points(2));
+        set(handles.screw_pos_1, 'String', data_points(1));
+        set(handles.screw_pos_2, 'String', data_points(2));  
     catch
         disp 'Check this box after the program starts running'
         set(handles.calc_next_pos, 'Value', 0);
-        set(handles.Pos1Set, 'String', data_points(1));
-        set(handles.Pos2Set, 'String', data_points(2));
     end
 end
 
@@ -464,67 +477,7 @@ function write_to_arduino(handles, port, motor, value)
 fprintf(handles.objs(port),'%s\n',['P', int2str(motor), int2str(value)]);
 pause(.015);
 
-
-%% Dr. Vincent's functions
-
-%% Make fake power data based on current positions
-function p = laser_model(pos)
-pos = pos(1,1:2)';
-c = [.175;-.175];
-sigma=sqrt(100)*pi/180;
-P=10;
-noise_sigma=.1;
-p = P*exp(-0.5*norm(pos-c,2).^2/sigma^2)+noise_sigma*randn(1);
-
 %% Calculate next positions based on power data
-function [thetaout] = simultaneous_perturbation_stochastic_approximation(power)
-%thetaout = [1 + power / 3; 1+ power / 3];
-%return;
-p=2; % dimension of search space
-persistent k
-persistent theta
-persistent delta
-persistent yplus
-a=10*pi/180;
-c=10*pi/180;
-A=1;
-alpha=.6;
-gamma=.6;
-startflag=0;
-
-%
-% power<0 indicates this is the first time this function has been called
-%
-if (power<0), 
-    theta=[0;0];
-    yplus=0;
-    k=0;
-    ck=c/k^gamma;
-    delta = 2*ck*round(rand(p,1))-1;
-    thetaout = theta + delta;
-    return;
-end;
-k=k+1;
-if (mod(k,2) == 0)
-    yminus = power;
-%
-% Update theta
-%
-    ck=c/k^gamma;
-    ak=a/(k+A)^alpha;
-    ghat = (yplus - yminus)./(2*ck*delta);
-    theta = theta + ak*ghat;
-%
-% Update thetaout
-% 
-    ck=c/k^gamma;
-    delta = 2*ck*round(rand(p,1))-1;
-    thetaout = theta + delta;
-
-else
-    yplus = power;
-    thetaout = theta - delta;
-end
 
 %%% ------------------------------------------------------------------- %%%
 %%% GUI functions. Most of these are empty
@@ -557,7 +510,7 @@ if (~isfield(handles, 'read_from_file'))
 end
 
 if (~isfield(handles, 'fake_power'))
-    handles.fake_power = false;
+    handles.fake_power = true;
 end
 
 v=get(hObject,'Value');
@@ -611,7 +564,7 @@ case(1)
     %end
     
     % Make a new figure for graphing during operation
-    figure;
+    figure(1);
         
     % Start the timer (for some reason guidata must be updated here, 
     % probably because the timer starts before the code updates after the switch statement   
