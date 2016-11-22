@@ -428,6 +428,12 @@ try
     current_pos1_2 = eval(get(handles.Pos1Set_2,'String'));
     current_pos2_2 = eval(get(handles.Pos2Set_2,'String'));
     current_pos3_2 = eval(get(handles.Pos3Set_2,'String'));
+    %current_pos1 = eval(get(handles.Pos1,'String')); 
+    %current_pos2 = eval(get(handles.Pos2,'String'));
+    %current_pos3 = eval(get(handles.Pos3,'String'));
+    %current_pos1_2 = eval(get(handles.Pos1_2,'String'));
+    %current_pos2_2 = eval(get(handles.Pos2_2,'String'));
+    %current_pos3_2 = eval(get(handles.Pos3_2,'String'));
 catch
     current_pos1 = 0;
     current_pos2 = 0;
@@ -449,10 +455,10 @@ if (get(hObject,'Value') == 1)
     try
         EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
         data_points = simultaneous_perturbation_stochastic_approximation(-1) / EncoderScaling;
-        set(handles.Pos1Set, 'String', data_points(1));
-        set(handles.Pos2Set, 'String', data_points(2));
-        set(handles.screw_pos_1, 'String', data_points(1));
-        set(handles.screw_pos_2, 'String', data_points(2));  
+        %set(handles.Pos1Set, 'String', data_points(1));
+        %set(handles.Pos2Set, 'String', data_points(2));
+        %set(handles.screw_pos_1, 'String', data_points(1));
+        %set(handles.screw_pos_2, 'String', data_points(2));  
     catch
         disp 'Check this box after the program starts running'
         set(handles.calc_next_pos, 'Value', 0);
