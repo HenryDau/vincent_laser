@@ -113,7 +113,7 @@ for row = 1:nrows
     if (~isempty(handles.position_data{1,row}))
         fprintf(fileID,'%5.2f\t', handles.time_stamp(1, row));
         fprintf(fileID,'%3.5f\t',handles.power_data(2, row));
-        %fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
+        fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
         fprintf(fileID,'%s', handles.position_data{1,row});
     end
 end
@@ -286,7 +286,8 @@ try
         [handles.Value, handles.Timestamp, ~] = handles.ophir_app.GetData(handles.open_USB(1),0);
     else
         % Don't read from the laser
-        handles.Value = laser_model(get_current_position(handles));
+        %handles.Value = laser_model(get_current_position(handles));
+        handles.Value = laser_model(get_current_screw_positions(handles));
         handles.Timestamp = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
     end
 
@@ -312,7 +313,7 @@ try
         set(h,'String',handles.Value(end));
 
         % Activly plot the power data (comment line to stop active graphing)
-        figure(1);
+        %figure(1);
         plot(handles.time_stamp(1, :),handles.power_data(2, :));
 
         % Take into account backlash for these data points
@@ -428,12 +429,41 @@ try
     current_pos1_2 = eval(get(handles.Pos1Set_2,'String'));
     current_pos2_2 = eval(get(handles.Pos2Set_2,'String'));
     current_pos3_2 = eval(get(handles.Pos3Set_2,'String'));
+    
     %current_pos1 = eval(get(handles.Pos1,'String')); 
     %current_pos2 = eval(get(handles.Pos2,'String'));
     %current_pos3 = eval(get(handles.Pos3,'String'));
     %current_pos1_2 = eval(get(handles.Pos1_2,'String'));
     %current_pos2_2 = eval(get(handles.Pos2_2,'String'));
     %current_pos3_2 = eval(get(handles.Pos3_2,'String'));
+    
+    current_pos1 = eval(get(handles.screw_pos_1,'String')); 
+    current_pos2 = eval(get(handles.screw_pos_2,'String'));
+    current_pos3 = eval(get(handles.screw_pos_3,'String'));
+    current_pos1_2 = eval(get(handles.screw_pos_1_2,'String'));
+    current_pos2_2 = eval(get(handles.screw_pos_2_2,'String'));
+    current_pos3_2 = eval(get(handles.screw_pos_3_2,'String'));
+catch
+    current_pos1 = 0;
+    current_pos2 = 0;
+    current_pos3 = 0;
+    current_pos1_2 = 0;
+    current_pos2_2 = 0;
+    current_pos3_2 = 0;
+end
+
+positions = [current_pos1, current_pos2, current_pos3, ...
+    current_pos1_2, current_pos2_2, current_pos3_2];
+
+%% --- Function to get the current screw positions
+function positions = get_current_screw_positions(handles)
+try
+    current_pos1 = eval(get(handles.screw_pos_1,'String')); 
+    current_pos2 = eval(get(handles.screw_pos_2,'String'));
+    current_pos3 = eval(get(handles.screw_pos_3,'String'));
+    current_pos1_2 = eval(get(handles.screw_pos_1_2,'String'));
+    current_pos2_2 = eval(get(handles.screw_pos_2_2,'String'));
+    current_pos3_2 = eval(get(handles.screw_pos_3_2,'String'));
 catch
     current_pos1 = 0;
     current_pos2 = 0;
@@ -570,7 +600,7 @@ case(1)
     %end
     
     % Make a new figure for graphing during operation
-    figure(1);
+    figure();
         
     % Start the timer (for some reason guidata must be updated here, 
     % probably because the timer starts before the code updates after the switch statement   
