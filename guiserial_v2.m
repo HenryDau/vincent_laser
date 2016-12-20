@@ -66,7 +66,7 @@ function guiserial_v2_OpeningFcn(hObject, ~, handles, varargin)
 
 % Choose default command line output for guiserial_v2
 handles.output = hObject;
-handles.COMS = {'COM6', 'COM7'};
+handles.COMS = {'COM7', 'COM6'};
 %handles.COMS = {'/dev/cu.usbmodem1411', '/dev/cu.usbmodem1421'};
 set(handles.Motor1Slider,'SliderStep',[1/1440 10/1440])
 set(handles.Motor2Slider,'SliderStep',[1/1440 10/1440])
@@ -235,11 +235,13 @@ try
     
         % Update positions because the flag is set
         handles = update_positions(handles);
+       
         %handles.position_setpoints
     end
 
     % If there are more rows than the current index
     [nrows, ~] = size(handles.position_setpoints);
+    
     if (handles.index < nrows )%&& (get(handles.calc_next_pos,'Value') == 0))
         
         %This loop makes sure that if, for whatever reason, the current time is
@@ -313,7 +315,7 @@ try
         set(h,'String',handles.Value(end));
 
         % Activly plot the power data (comment line to stop active graphing)
-        %figure(1);
+        set(0,'CurrentFigure',handles.PowerFig);
         plot(handles.time_stamp(1, :),handles.power_data(2, :));
 
         % Take into account backlash for these data points
@@ -404,10 +406,19 @@ function [handles] = update_positions(handles)
 try
     disp 'Updating position'
     %pos = get_next_setpoints(handles);
-    pos = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')));
-    filler = [0,0,0,0];
+    [pos, current_setpoint, maxpower] = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')));
+    filler = [pos(1), pos(2), 0, 0,0,0];
     EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
-    handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), pos' / EncoderScaling, filler];
+    
+    % Active plotting
+    set(0,'CurrentFigure',handles.AuxFig);
+    a=get(gca,'children');
+    delete(a);
+    text(.5,.5,mat2str(current_setpoint ));
+    text(.5,.25,num2str(maxpower));
+    
+    % Save the new positions
+    handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), filler / EncoderScaling];
 catch
     disp 'Wrong position updater used'
     %pos = get_next_setpoints(handles);
@@ -483,8 +494,17 @@ function calc_next_pos_Callback(hObject, eventdata, handles)
 
 if (get(hObject,'Value') == 1)
     try
+        [pos] = simultaneous_perturbation_stochastic_approximation(-1);
+        filler = [pos(1), pos(2), 0, 0,0,0];
         EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
-        data_points = simultaneous_perturbation_stochastic_approximation(-1) / EncoderScaling;
+        
+        handles.position_setpoints = [0,0,0,0,0,0,0];
+        handles.position_setpoints(end+1, :) = [0,0,0,0,0,0,0];
+        handles.position_setpoints(end+1, :) = [0,0,0,0,0,0,0];
+        
+        % Save the new positions
+        handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), filler / EncoderScaling];
+    
         %set(handles.Pos1Set, 'String', data_points(1));
         %set(handles.Pos2Set, 'String', data_points(2));
         %set(handles.screw_pos_1, 'String', data_points(1));
@@ -493,6 +513,8 @@ if (get(hObject,'Value') == 1)
         disp 'Check this box after the program starts running'
         set(handles.calc_next_pos, 'Value', 0);
     end
+    
+    guidata(hObject,handles);
 end
 
 
@@ -546,7 +568,7 @@ if (~isfield(handles, 'read_from_file'))
 end
 
 if (~isfield(handles, 'fake_power'))
-    handles.fake_power = true;
+    handles.fake_power = false;
 end
 
 v=get(hObject,'Value');
@@ -592,7 +614,7 @@ case(1)
     handles.power_data=[];
     handles.Value = [];
     handles.Timestamp = [];
-    handles.timeout_delay = 4;
+    handles.timeout_delay = 25;
     
     % Make the motos snug against the bolt
     %for i = 1:3
@@ -600,7 +622,13 @@ case(1)
     %end
     
     % Make a new figure for graphing during operation
-    figure();
+    figure(1);
+    clf
+    handles.PowerFig=gcf;
+    figure(2)
+    clf
+    axis([0 1 0 1])
+    handles.AuxFig=gcf;
         
     % Start the timer (for some reason guidata must be updated here, 
     % probably because the timer starts before the code updates after the switch statement   
