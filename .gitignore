@@ -1,4 +1,5 @@
 saved_run.txt
+assem_*
 close_serial.m
 log*.*
 *.asv
