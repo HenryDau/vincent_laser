@@ -1,4 +1,4 @@
-function [thetaout, current_position, maxpower] = simultaneous_perturbation_stochastic_approximation(power)
+function [thetaout, current_position, maxpower] = simultaneous_perturbation_stochastic_approximation(power, pos)
 %thetaout = [1 + power / 3; 1+ power / 3];
 %return;
 p=2; % dimension of search space
@@ -10,6 +10,7 @@ persistent delta
 persistent yplus
 persistent ck
 persistent toppower
+persistent posplus
 a=1*pi/180;
 c=5*pi/180;
 A=1;
@@ -26,6 +27,7 @@ if (power<0),
     theta=zeros(p,1);
     lasttheta=theta;
     toppower=0;
+    posplus=0;
     yplus=0;
     k=0;
     ell=1;
@@ -41,8 +43,10 @@ if (mod(k,3) == 0)
 %
 % Update theta
 %
+    disp(['delta = ',mat2str(2*delta)])
+    disp(['measured =',mat2str(posplus-pos)])
     ak=a/(ell+A)^alpha;
-    ghat = (yplus - yminus)./delta;
+    ghat = (yplus - yminus)./(posplus - pos);
     lasttheta = theta;
     theta = theta + ak*ghat;
 %
@@ -56,19 +60,22 @@ if (mod(k,3) == 0)
 
 elseif (mod(k,3)==2),
     yplus = power;
+    posplus = pos;
     thetaout = theta - delta;
 else
     if power<.9*toppower,
         theta = lasttheta; % reject move if power is lower by significant amount
         disp(['Move rejected ', mat2str(theta)]);
     end;
-    if power>toppower,
+    if power>=.9*toppower,
         toppower=power;
     end;
     thetaout = theta + delta;
 end
+
+thetaout = [0;0;thetaout];
+
 current_position=theta;
 maxpower=toppower;
-thetaout
-k
+disp(['k=',int2str(k)])
 delta

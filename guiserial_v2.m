@@ -362,6 +362,9 @@ try
             set(h,'String',dataarray{12});
             h=findobj(handles.guiserial,'Tag','is_error');
             set(h,'String',dataarray{14});
+            if (dataarray{14}(1) ~= 48)
+                disp(['Error in assembly 1 motor: ',dataarray{14}])
+            end
         end
 
         % Assembly 2
@@ -391,6 +394,9 @@ try
             set(h,'String',dataarray{11});
             h=findobj(handles.guiserial,'Tag','IntErr3_2');
             set(h,'String',dataarray{12});
+            if (dataarray{14}(1) ~= 48)
+                disp(['Error in assembly 2 motor: ',dataarray{14}])
+            end
         end
     end
     disp('data read')
@@ -406,8 +412,10 @@ function [handles] = update_positions(handles)
 try
     disp 'Updating position'
     %pos = get_next_setpoints(handles);
-    [pos, current_setpoint, maxpower] = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')));
-    filler = [pos(1), pos(2), 0, 0,0,0];
+    actual_pos = [eval(get(handles.Pos1,'String')); eval(get(handles.Pos2,'String'));
+                  eval(get(handles.Pos1_2,'String')); eval(get(handles.Pos2_2,'String'))];
+    [pos, current_setpoint, maxpower] = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')), actual_pos);
+    formatter = [pos(1), pos(2), 0, pos(3) , pos(4) ,0];
     EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
     
     % Active plotting
@@ -418,7 +426,7 @@ try
     text(.5,.25,num2str(maxpower));
     
     % Save the new positions
-    handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), filler / EncoderScaling];
+    handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), formatter / EncoderScaling];
 catch
     disp 'Wrong position updater used'
     %pos = get_next_setpoints(handles);

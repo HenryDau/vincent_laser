@@ -5,6 +5,7 @@ const bool SERIAL_OUTPUT = true; // set to true to send data out serial line
 const bool SERIAL_DIAGNOSE = false; // set to true to send back what was recieved
 const float EncoderScaling = 2 * 3.141 / 1440; // Encoder counts to radians
 const int MAX_CHANGE = 50; // If the position of an encoder jumps by more than this number, flag an error
+const int MAX_SAT = 1000;  // Time before motor saturates
 
 // Digial/output
 //   Motor
@@ -17,12 +18,19 @@ const int DIRB = 8;
 const int DIRC = 5;
 const int PWMC = 6;
 
+// Time saturated
+long int ts_1 = 0;
+long int ts_2 = 0;
+long int ts_3 = 0;
 
 // Speed Controller gains
-const float P = 1000;
-const float Pd = 50;
-const float PInt = 2000;
-const float umax = 250;
+//const float P = 1000;
+//const float Pd = 50;
+//const float PInt = 2000;
+const float P = 250;
+const float Pd = 12.5;
+const float PInt = 1000;
+const float umax = 150;
 
 // Switches
 //#define DECREASE 16
@@ -116,7 +124,7 @@ unsigned int current_time = 0;
 unsigned int k = 1;
 volatile bool tighten = FALSE;
 volatile long last_interrupt_time = 0;
-bool problem = false;
+int problem = 0;
 
 // Serial Communication
 String inputString = "";         // a string to hold incoming data
@@ -226,7 +234,7 @@ void setup() {
 }
 
 void loop() {
-
+  
   if (stringComplete) {
     //Serial.println(inputString);
 
@@ -241,9 +249,12 @@ void loop() {
     }
 
     // Acknowledge an error if it happened
-    if (problem && inputString.substring(0, 2) == "OK") {
+    if (problem != 0 && inputString.substring(0, 2) == "OK") {
       Serial.println("Error acknowledged");
-      problem = false;
+      ts_1 = 0;
+      ts_2 = 0;
+      ts_3 = 0;
+      problem = 0;
     }
 
     switch (inputString.charAt(0)) {
@@ -352,13 +363,13 @@ void loop() {
   }
   //  incomingByte = 0;
 
-  if (!problem) {
+  if (problem == 0) {
     // Read First encoder
     Pos1 = _FirstEncoderTicks;
 
     // Check for an error
     if (difference(Pos1, Pos1old) >= MAX_CHANGE) {
-      problem = true;
+      problem = 4;
       Serial.println("Error in Encoder 1. Type 'OK' to issue commands again");
     }
 
@@ -373,13 +384,16 @@ void loop() {
     u1 = (int)(P * err1 + Pd * xvel1 + PInt * err1int);
     // Anti-windup
     if (abs(u1) > umax) {
+      ts_1 = ts_1 + 1;
       u1 = umax * sgn(u1);
       if (P > 0) {
-        err1 = min(u1 / P, err1);
+        err1 = sgn(u1)*min(abs(u1) / P, abs(err1));
       }
       if (PInt > 0) {
         err1int = ((float)u1 - P * err1 - Pd * xvel1) / PInt;
       }
+    } else {
+      ts_1 = 0;
     }
 
     // Read Second encoder
@@ -387,7 +401,7 @@ void loop() {
 
     // Check for an error
     if (difference(Pos2, Pos2old) >= MAX_CHANGE) {
-      problem = true;
+      problem = 4;
       Serial.println("Error in Encoder 2. Type 'OK' to issue commands again");
     }
     Pos2rad = EncoderScaling * (float)Pos2;
@@ -401,13 +415,16 @@ void loop() {
     u2 = (int)(P * err2 + Pd * xvel2 + PInt * err2int);
     // Anti-windup
     if (abs(u2) > umax) {
+      ts_2 = ts_2 + 1;
       u2 = umax * sgn(u2);
       if (P > 0) {
-        err2 = min(u2 / P, err2);
+        err2 = sgn(u2)*min(abs(u2) / P, abs(err2));
       }
       if (PInt > 0) {
         err2int = ((float)u2 - P * err2 - Pd * xvel2) / PInt;
       }
+    } else {
+      ts_2 = 0;
     }
 
     // Read Third encoder
@@ -415,7 +432,7 @@ void loop() {
 
     // Check for an error
     if (difference(Pos3, Pos3old) >= MAX_CHANGE) {
-      problem = true;
+      problem = 4;
       Serial.println("Error in Encoder 3. Type 'OK' to issue commands again");
     }
     Pos3rad = EncoderScaling * (float)Pos3;
@@ -429,13 +446,16 @@ void loop() {
     u3 = (int)(P * err3 + Pd * xvel3 + PInt * err3int);
     // Anti-windup
     if (abs(u3) > umax) {
+      ts_3 = ts_3 + 1;
       u3 = umax * sgn(u3);
       if (P > 0) {
-        err3 = min(u3 / P, err3);
+        err3 = sgn(u3)*min(abs(u3) / P, abs(err3));
       }
       if (PInt > 0) {
         err3int = ((float)u3 - P * err3 - Pd * xvel3) / PInt;
       }
+    } else {
+      ts_3 = 0;
     }
   } else {
     u1 = 0;
@@ -488,7 +508,18 @@ void loop() {
   }
   last_time = current_time;
 
-
+  if (ts_1 > MAX_SAT ){
+    problem = 1;
+  }
+ 
+  if (ts_2 > MAX_SAT ){
+    problem = 2;
+  }
+  
+  if (ts_3 > MAX_SAT ){
+    problem = 3;
+  }
+  
   // Send out command
   if (u1 < 0) {
     digitalWriteFast(DIRA, LOW);
@@ -528,7 +559,6 @@ void loop() {
 
 // Interrupt service routines for the left motor's quadrature encoder
 void HandleLeftMotorInterruptA() {
-
   _FirstEncoderBSet = digitalReadFast(c_FirstEncoderPinB);
   _FirstEncoderASet = digitalReadFast(c_FirstEncoderPinA);
 
@@ -641,4 +671,3 @@ int difference(int first, int second) {
   diff = diff * sgn(diff);
   return diff;
 }
-
