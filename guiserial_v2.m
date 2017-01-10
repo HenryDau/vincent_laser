@@ -1,19 +1,9 @@
-%{
-TODO: Confirm unit conversion is correct (minimize EncdoerScaling)
-
-3. Ensure scan code is working correctly (read from file)
-
-1. Run from power supplys instead of batteries
-
-2. Move everything into the boxes
-
-%}
 function varargout = guiserial_v2(varargin)
 % GUISERIAL_V2 MATLAB code for guiserial_v2.fig
 %      GUISERIAL_V2, by itself, creates a new GUISERIAL_V2 or raises the existing
 %      singleton*.
 %
-%      H = GUISERIAL_V2 returns the handle to a new GUISERIAL_V2 or the handle to
+%      H = GUISERIAL_V2 returns the handle to a new GUISERIAL_V2 ort the handle to
 %      the existing singleton*.
 %
 %      GUISERIAL_V2('CALLBACK',hObject,eventData,handles,...) calls the local
@@ -109,10 +99,11 @@ while (exist(['log_run', int2str(counter), '.txt']) == 2)
 end
 fileID = fopen(['log_run', int2str(counter), '.txt'], 'w');
 [~,nrows] = size(handles.position_data);
+handles.power_data(:,end+1) = -1;
 for row = 1:nrows
     if (~isempty(handles.position_data{1,row}))
         fprintf(fileID,'%5.2f\t', handles.time_stamp(1, row));
-        fprintf(fileID,'%3.5f\t',handles.power_data(2, row));
+        fprintf(fileID,'%3.5f\t',handles.power_data(2, row+1));
         fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
         fprintf(fileID,'%s', handles.position_data{1,row});
     end
@@ -242,7 +233,20 @@ try
     % If there are more rows than the current index
     [nrows, ~] = size(handles.position_setpoints);
     
+    % Get power data
+    if (~handles.fake_power)
+        % Read from the laser
+        [handles.Value, handles.Timestamp, ~] = handles.ophir_app.GetData(handles.open_USB(1),0);
+    else
+        % Don't read from the laser
+        %handles.Value = laser_model(get_current_position(handles));
+        handles.Value = laser_model(get_current_screw_positions(handles));
+        handles.Timestamp = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
+    end
+    
     if (handles.index < nrows )%&& (get(handles.calc_next_pos,'Value') == 0))
+        
+        
         
         %This loop makes sure that if, for whatever reason, the current time is
         %greater than the index (which shouldn't happen), then the program will
@@ -283,16 +287,9 @@ try
             handles, 2, 3, 7);
     end
 
-    if (~handles.fake_power)
-        % Read from the laser
-        [handles.Value, handles.Timestamp, ~] = handles.ophir_app.GetData(handles.open_USB(1),0);
-    else
-        % Don't read from the laser
-        %handles.Value = laser_model(get_current_position(handles));
-        handles.Value = laser_model(get_current_screw_positions(handles));
-        handles.Timestamp = handles.timer.TasksExecuted * handles.timer.AveragePeriod;
-    end
-
+  
+    pause(.01)
+    
     %Check to see if the laser value is valid (Ensure the number of data points
     %is consistent
     if (~isempty(handles.Value))
@@ -427,8 +424,9 @@ try
     
     % Save the new positions
     handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), formatter / EncoderScaling];
-catch
-    disp 'Wrong position updater used'
+catch me
+    me
+    disp 'Error in stochastic function'
     %pos = get_next_setpoints(handles);
     %handles.position_setpoints(end+1, :) = [0, pos];
 end
@@ -592,7 +590,9 @@ case(1)
     handles.position_setpoints = [];
     if (handles.read_from_file)
         % Reading from input file
-        handles.position_setpoints = load('test_data.txt');
+        handles.position_setpoints = load('test_data_1245_s200.txt');
+    else
+        pause(1)
     end
     handles.index = 2;
     
@@ -688,7 +688,6 @@ case(0)
     set(handles.startbutton_fake_power, 'Value', 0); 
 end
 
-
 % Update handles structure
 guidata(hObject, handles);
 
@@ -759,6 +758,7 @@ difference = find_backlash(1, handles, 1);
 set(handles.backlash_1, 'String', difference / EncoderScaling);
 difference = find_backlash(1, handles, 2);
 set(handles.backlash_1_2, 'String', difference / EncoderScaling);
+disp('Done with Backlash for motor 1')
 
 
 function backlash_2_Callback(hObject, eventdata, handles)
@@ -778,6 +778,7 @@ difference = find_backlash(2, handles, 1);
 set(handles.backlash_2, 'String', difference / EncoderScaling);
 difference = find_backlash(2, handles, 2);
 set(handles.backlash_2_2, 'String', difference / EncoderScaling);
+disp('Done with Backlash for motor 2')
 
 
 function backlash_3_Callback(hObject, eventdata, handles)
@@ -801,6 +802,7 @@ difference = find_backlash(3, handles, 1);
 set(handles.backlash_3, 'String', difference / EncoderScaling);
 difference = find_backlash(3, handles, 2);
 set(handles.backlash_3_2, 'String', difference / EncoderScaling);
+disp('Done with Backlash for motor 3')
 
 %% --- Executes on button press in backlash_all.
 function backlash_all_Callback(hObject, eventdata, handles)

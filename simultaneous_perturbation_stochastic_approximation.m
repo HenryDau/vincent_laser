@@ -1,7 +1,8 @@
-function [thetaout, current_position, maxpower] = simultaneous_perturbation_stochastic_approximation(power, pos)
+function [posout, current_position, maxpower] = simultaneous_perturbation_stochastic_approximation(power, pos)
 %thetaout = [1 + power / 3; 1+ power / 3];
 %return;
 p=2; % dimension of search space
+pos_index=[3 4];
 persistent k
 persistent ell
 persistent theta
@@ -11,10 +12,10 @@ persistent yplus
 persistent ck
 persistent toppower
 persistent posplus
-a=1*pi/180;
-c=5*pi/180;
+a=.1*pi/180;
+c=2*pi/180;
 A=1;
-alpha=.5;
+alpha=.25;
 gamma=.25;
 startflag=0;
 yminus=0;
@@ -34,8 +35,11 @@ if (power<0),
     ck=c/(ell+1)^gamma;
     delta = ck*(2*round(rand(p,1))-1);
     thetaout = theta;
+    posout=zeros(4,1);
+    posout(pos_index,:)=thetaout
     return;
 end;
+pos=pos(pos_index);
 k=k+1;
 if (mod(k,3) == 0)
     yminus = power;
@@ -46,7 +50,11 @@ if (mod(k,3) == 0)
     disp(['delta = ',mat2str(2*delta)])
     disp(['measured =',mat2str(posplus-pos)])
     ak=a/(ell+A)^alpha;
-    ghat = (yplus - yminus)./(posplus - pos);
+%    ghat = (yplus - yminus)./(posplus - pos);
+    ghat = (yplus - yminus)./(2*delta);
+    if sum(isinf(ghat)),
+        ghat=zeros(size(ghat));
+    end;
     lasttheta = theta;
     theta = theta + ak*ghat;
 %
@@ -73,7 +81,8 @@ else
     thetaout = theta + delta;
 end
 
-thetaout = [0;0;thetaout];
+posout=zeros(4,1);
+posout(pos_index,1)=thetaout
 
 current_position=theta;
 maxpower=toppower;

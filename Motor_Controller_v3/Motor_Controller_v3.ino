@@ -6,6 +6,7 @@ const bool SERIAL_DIAGNOSE = false; // set to true to send back what was recieve
 const float EncoderScaling = 2 * 3.141 / 1440; // Encoder counts to radians
 const int MAX_CHANGE = 50; // If the position of an encoder jumps by more than this number, flag an error
 const int MAX_SAT = 1000;  // Time before motor saturates
+const int DISABLE_THREE = true;
 
 // Digial/output
 //   Motor
@@ -383,7 +384,7 @@ void loop() {
     err1int = err1int + err1 * Ts / 1000000.0;
     u1 = (int)(P * err1 + Pd * xvel1 + PInt * err1int);
     // Anti-windup
-    if (abs(u1) > umax) {
+    if (abs(u1) >= umax) {
       ts_1 = ts_1 + 1;
       u1 = umax * sgn(u1);
       if (P > 0) {
@@ -414,7 +415,7 @@ void loop() {
     err2int = err2int + err2 * Ts / 1000000.0;
     u2 = (int)(P * err2 + Pd * xvel2 + PInt * err2int);
     // Anti-windup
-    if (abs(u2) > umax) {
+    if (abs(u2) >= umax) {
       ts_2 = ts_2 + 1;
       u2 = umax * sgn(u2);
       if (P > 0) {
@@ -445,7 +446,11 @@ void loop() {
     err3int = err3int + err3 * Ts / 1000000.0;
     u3 = (int)(P * err3 + Pd * xvel3 + PInt * err3int);
     // Anti-windup
-    if (abs(u3) > umax) {
+    if (DISABLE_THREE){
+      u3 = 0;
+    }
+    
+    if (abs(u3) >= umax) {
       ts_3 = ts_3 + 1;
       u3 = umax * sgn(u3);
       if (P > 0) {
@@ -466,6 +471,7 @@ void loop() {
   // Data Outputs
 
   //k = k + 1;
+  //if (1) {
   if (data_request) {
     if (SERIAL_OUTPUT) {
       Serial.print(ref1, 4);
@@ -552,8 +558,6 @@ void loop() {
     u3 = min(u3, 255);
     analogWrite(PWMC, u3);
   }
-
-
 }
 
 
