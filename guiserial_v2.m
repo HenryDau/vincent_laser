@@ -421,9 +421,9 @@ end
 function write_to_arduino_with_backlash(object, object2, handles, port, motor, value_index)
 EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
 set(object, 'String', handles.position_setpoints(handles.index, value_index) * EncoderScaling);    
-if (handles.position_setpoints(handles.index, value_index) - handles.position_setpoints(handles.index - 1, value_index) >= 0)
+if (handles.position_setpoints(handles.index, value_index) - handles.position_setpoints(handles.index - 1, value_index) > 0)
     write_to_arduino(handles, port, motor, handles.position_setpoints(handles.index, value_index));
-else
+elseif (handles.position_setpoints(handles.index, value_index) - handles.position_setpoints(handles.index - 1, value_index) < 0)
     write_to_arduino(handles, port, motor, ...
         handles.position_setpoints(handles.index, value_index) - eval(get(object2,'String')));
 end
@@ -647,7 +647,7 @@ case(1)
     handles.Timestamp = [];
     handles.timeout_delay = 5;
     handles.function_index = 1;
-    handles.functions_array = {'simultaneous_perturbation_stochastic_approximation', 'test_function'};
+    handles.functions_array = {'simultaneous_perturbation_hillclimb'};
     handles.functions_initialized = zeros(1, length(handles.functions_array));
     
     
