@@ -22,7 +22,7 @@ function varargout = guiserial_v2(varargin)
 
 % Edit the above text to modify the response to help guiserial_v2
 
-% Last Modified by GUIDE v2.5 01-Nov-2016 11:32:45
+% Last Modified by GUIDE v2.5 20-Jan-2017 10:08:50
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -56,7 +56,7 @@ function guiserial_v2_OpeningFcn(hObject, ~, handles, varargin)
 
 % Choose default command line output for guiserial_v2
 handles.output = hObject;
-handles.COMS = {'COM7', 'COM6'};
+handles.COMS = {'COM4', 'COM5'};
 %handles.COMS = {'/dev/cu.usbmodem1411', '/dev/cu.usbmodem1421'};
 set(handles.Motor1Slider,'SliderStep',[1/1440 10/1440])
 set(handles.Motor2Slider,'SliderStep',[1/1440 10/1440])
@@ -88,131 +88,6 @@ if exist('handles'),
       end
   end
 end
-
-%% Writes the run data to a file
-function write_to_file(handles)
-% Outputs the data to a new file of the name 'log_runX.txt' where x
-% makes the file_name unique
-counter = 1;
-while (exist(['log_run', int2str(counter), '.txt']) == 2)
-    counter = counter + 1;
-end
-fileID = fopen(['log_run', int2str(counter), '.txt'], 'w');
-[~,nrows] = size(handles.position_data);
-handles.power_data(:,end+1) = -1;
-for row = 1:nrows
-    if (~isempty(handles.position_data{1,row}))
-        fprintf(fileID,'%5.2f\t', handles.time_stamp(1, row));
-        fprintf(fileID,'%3.5f\t',handles.power_data(2, row+1));
-        fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
-        fprintf(fileID,'%s', handles.position_data{1,row});
-    end
-end
-fclose(fileID);
-disp(['Output to file: log_run', int2str(counter), '.txt']);
-
-%% Open arduino connections
-function [handles] = open_arduino_connections(handles)
-
-disp('Opening Arduino Connections: Starting timer object')
-
-% Make sure there is no connection over the USB for all COMS.
-% (This should only execute if there was an error on the previous run)
-for i = 1:length(handles.COMS)
-    if (~isempty(instrfind('Port',handles.COMS(i))))
-        disp 'Closing irrelavent connections'
-        x=instrfind('Port',handles.COMS(i));
-        fclose(x);
-    end
-end
-
-% Add a COMS object for every COM listed
-for i = 1:length(handles.COMS)
-    obj = serial(handles.COMS(i), 'BaudRate', 115200 ,'Timeout',.015);
-    obj.terminator = char(10);
-    handles.objs(i) = obj;
-    fopen(handles.objs(i));
-end
-
-function [handles, is_ok] = open_laser_connections(hObject, handles)
-is_ok = true;
-
-% Open the laser connections first (fail if unable to open)
-%% Start the laser connections and start retrieving data
-try
-    disp('Opening laser connections');
-    ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
-    % Use some of the methods of the object to modify some settings, do some
-    % initialisation etc
-    % Request the object scans for USB devices:
-    SerialNumbers = ophirApp.ScanUSB;
-    if(isempty(SerialNumbers))
-        disp ('No USB devices seem to be connected. Please check and try again',...
-                'Ophir Measurement COM interface: ScanUSB error')
-    end
-    % Open the first USB device found:
-    h_USB = ophirApp.OpenUSBDevice(SerialNumbers{1});
-
-    % Instruct the sensor to start streaming measurements on the first channel:
-    ophirApp.StartStream(h_USB(1),0);
-    handles.ophir_app = ophirApp;
-    handles.open_USB = h_USB;
-
-catch COM_error
-    %disp(COM_error.message);
-    %error('Could not establish a link to OphirLMMeasurement');
-    if (~handles.fake_power)
-        disp 'No laser connection detected. Please use the Start (fake_power).'
-        set(handles.startbutton, 'Value', 0);
-        set(handles.startbutton_no_file, 'Value', 0);
-        set(handles.startbutton_fake_power, 'Value', 0);
-
-        % Close the arduino connections
-        handles = close_arduino_connections(handles);
-
-        % Save changes made to handles
-        guidata(hObject,handles);
-        is_ok = false;
-    end
-end
-
-% Save changes made to handles
-guidata(hObject,handles);
-
-function [handles] = close_arduino_connections(handles)
-disp('Closing Arduino Connections')
-    
-% Close the arduino connection if it is active
-for i = 1:length(handles.objs)
-    obj=handles.objs(i);
-    if ~isempty(obj),
-        if(strcmp(get(obj,'Status'),'open'))
-          fclose(obj);
-        end
-    end
-end
-
-%% Close all existing laser connections
-function [handles] = close_laser_connections(handles)
-disp('Closing laser connections');
-try
-    ophir_app=handles.ophir_app;
-    if ~isempty(ophir_app),
-        % Close the laser connections
-        ophir_app.StopAllStreams;
-        ophir_app.CloseAll;
-        ophir_app.delete;
-        clear ophir_app
-    end
-catch COM_error
-    
-end
-
-%% Delete the timer
-function [handles] = delete_timer(handles)
-delete(handles.timer);
-clear('handles.timer');
-
 
 %% Executes every period (.5 by default) when either 'Start' button is pressed
 function timer_callback(~,~,fighandle)
@@ -405,15 +280,33 @@ end
 
 %% Function to update positions of the motor based on power changes
 function [handles] = update_positions(handles)
-% Comment this try catch if you like, it is copied from writ_next_positions
 try
     disp 'Updating position'
-    %pos = get_next_setpoints(handles);
-    actual_pos = [eval(get(handles.Pos1,'String')); eval(get(handles.Pos2,'String'));
-                  eval(get(handles.Pos1_2,'String')); eval(get(handles.Pos2_2,'String'))];
-    [pos, current_setpoint, maxpower] = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')), actual_pos);
-    formatter = [pos(1), pos(2), 0, pos(3) , pos(4) ,0];
-    EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
+    actual_pos = [eval(get(handles.Pos1Set,'String')); eval(get(handles.Pos2Set,'String'));
+                  eval(get(handles.Pos1Set_2,'String')); eval(get(handles.Pos2Set_2,'String'))];
+    %[pos, current_setpoint, maxpower] = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')), actual_pos);
+
+    % TODO: Add a done indicator to the function output
+    % Execute the desired function
+    if (handles.functions_initialized(handles.function_index) == 0)
+        disp('first call')
+        eval(['[pos, current_setpoint, maxpower, done] = ',handles.functions_array{handles.function_index},'(-1,', mat2str(actual_pos),');'])
+        handles.functions_initialized(handles.function_index) = 1;
+    else
+        eval(['[pos, current_setpoint, maxpower, done] = ',handles.functions_array{handles.function_index},'(',get(handles.laser_power, 'String'),', ', mat2str(actual_pos),');'])
+        if (done)
+            % Update the function index
+            handles.function_index = mod(handles.function_index, length(handles.functions_array)) + 1;
+        end
+    end
+
+    % Print the current function index
+    handles.function_index
+
+    % TODO: Add done functionality
+    %if (done)
+    %   do new stuff 
+    %end
     
     % Active plotting
     set(0,'CurrentFigure',handles.AuxFig);
@@ -423,12 +316,12 @@ try
     text(.5,.25,num2str(maxpower));
     
     % Save the new positions
+    formatter = [pos(1), pos(2), 0, pos(3) , pos(4) ,0];
+    EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
     handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), formatter / EncoderScaling];
 catch me
     me
     disp 'Error in stochastic function'
-    %pos = get_next_setpoints(handles);
-    %handles.position_setpoints(end+1, :) = [0, pos];
 end
 
 %% Function to get the setpoints based on current data
@@ -440,12 +333,12 @@ return_this = get_current_position(handles) / EncoderScaling + 1;
 %% --- Function to get the current positions
 function positions = get_current_position(handles)
 try
-    current_pos1 = eval(get(handles.Pos1Set,'String')); 
-    current_pos2 = eval(get(handles.Pos2Set,'String'));
-    current_pos3 = eval(get(handles.Pos3Set,'String'));
-    current_pos1_2 = eval(get(handles.Pos1Set_2,'String'));
-    current_pos2_2 = eval(get(handles.Pos2Set_2,'String'));
-    current_pos3_2 = eval(get(handles.Pos3Set_2,'String'));
+    %current_pos1 = eval(get(handles.Pos1Set,'String')); 
+    %current_pos2 = eval(get(handles.Pos2Set,'String'));
+    %current_pos3 = eval(get(handles.Pos3Set,'String'));
+    %current_pos1_2 = eval(get(handles.Pos1Set_2,'String'));
+    %current_pos2_2 = eval(get(handles.Pos2Set_2,'String'));
+    %current_pos3_2 = eval(get(handles.Pos3Set_2,'String'));
     
     %current_pos1 = eval(get(handles.Pos1,'String')); 
     %current_pos2 = eval(get(handles.Pos2,'String'));
@@ -500,7 +393,10 @@ function calc_next_pos_Callback(hObject, eventdata, handles)
 
 if (get(hObject,'Value') == 1)
     try
-        [pos] = simultaneous_perturbation_stochastic_approximation(-1);
+        actual_pos = [eval(get(handles.Pos1Set,'String')); eval(get(handles.Pos2Set,'String'));
+                  eval(get(handles.Pos1Set_2,'String')); eval(get(handles.Pos2Set_2,'String'))];
+              
+        [pos] = simultaneous_perturbation_stochastic_approximation(-1, actual_pos);
         filler = [pos(1), pos(2), 0, 0,0,0];
         EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
         
@@ -511,12 +407,9 @@ if (get(hObject,'Value') == 1)
         % Save the new positions
         handles.position_setpoints(end+1, :) = [(handles.timer.TasksExecuted * handles.timer.AveragePeriod), filler / EncoderScaling];
     
-        %set(handles.Pos1Set, 'String', data_points(1));
-        %set(handles.Pos2Set, 'String', data_points(2));
-        %set(handles.screw_pos_1, 'String', data_points(1));
-        %set(handles.screw_pos_2, 'String', data_points(2));  
-    catch
-        disp 'Check this box after the program starts running'
+    catch me
+        me
+        %disp 'Check this box after the program starts running'
         set(handles.calc_next_pos, 'Value', 0);
     end
     
@@ -540,8 +433,137 @@ function write_to_arduino(handles, port, motor, value)
 
 fprintf(handles.objs(port),'%s\n',['P', int2str(motor), int2str(value)]);
 pause(.015);
+%%
 
-%% Calculate next positions based on power data
+%%%
+%%% Bookeeping functions
+%%%
+
+%% Writes the run data to a file
+function write_to_file(handles)
+% Outputs the data to a new file of the name 'log_runX.txt' where x
+% makes the file_name unique
+counter = 1;
+while (exist(['log_run', int2str(counter), '.txt']) == 2)
+    counter = counter + 1;
+end
+fileID = fopen(['log_run', int2str(counter), '.txt'], 'w');
+[~,nrows] = size(handles.position_data);
+handles.power_data(:,end+1) = -1;
+for row = 1:nrows
+    if (~isempty(handles.position_data{1,row}))
+        fprintf(fileID,'%5.2f\t', handles.time_stamp(1, row));
+        fprintf(fileID,'%3.5f\t',handles.power_data(2, row+1));
+        fprintf(fileID,'%5.5f\t', handles.pos_command_with_backlash(row, :));
+        fprintf(fileID,'%s', handles.position_data{1,row});
+    end
+end
+fclose(fileID);
+disp(['Output to file: log_run', int2str(counter), '.txt']);
+
+%% Open arduino connections
+function [handles] = open_arduino_connections(handles)
+
+disp('Opening Arduino Connections: Starting timer object')
+
+% Make sure there is no connection over the USB for all COMS.
+% (This should only execute if there was an error on the previous run)
+for i = 1:length(handles.COMS)
+    if (~isempty(instrfind('Port',handles.COMS(i))))
+        disp 'Closing irrelavent connections'
+        x=instrfind('Port',handles.COMS(i));
+        fclose(x);
+    end
+end
+
+% Add a COMS object for every COM listed
+for i = 1:length(handles.COMS)
+    obj = serial(handles.COMS(i), 'BaudRate', 115200 ,'Timeout',.015);
+    obj.terminator = char(10);
+    handles.objs(i) = obj;
+    fopen(handles.objs(i));
+end
+
+%% Start the laser connections and start retrieving data
+function [handles, is_ok] = open_laser_connections(hObject, handles)
+is_ok = true;
+
+% Open the laser connections first (fail if unable to open)
+try
+    disp('Opening laser connections');
+    ophirApp = actxserver('OphirLMMeasurement.CoLMMeasurement');
+    % Use some of the methods of the object to modify some settings, do some
+    % initialisation etc
+    % Request the object scans for USB devices:
+    SerialNumbers = ophirApp.ScanUSB;
+    if(isempty(SerialNumbers))
+        disp ('No USB devices seem to be connected. Please check and try again',...
+                'Ophir Measurement COM interface: ScanUSB error')
+    end
+    % Open the first USB device found:
+    h_USB = ophirApp.OpenUSBDevice(SerialNumbers{1});
+
+    % Instruct the sensor to start streaming measurements on the first channel:
+    ophirApp.StartStream(h_USB(1),0);
+    handles.ophir_app = ophirApp;
+    handles.open_USB = h_USB;
+
+catch COM_error
+    %disp(COM_error.message);
+    %error('Could not establish a link to OphirLMMeasurement');
+    if (~handles.fake_power)
+        disp 'No laser connection detected. Please use the Start (fake_power).'
+        set(handles.startbutton, 'Value', 0);
+        set(handles.startbutton_no_file, 'Value', 0);
+        set(handles.startbutton_fake_power, 'Value', 0);
+
+        % Close the arduino connections
+        handles = close_arduino_connections(handles);
+
+        % Save changes made to handles
+        guidata(hObject,handles);
+        is_ok = false;
+    end
+end
+
+% Save changes made to handles
+guidata(hObject,handles);
+
+%% Close all arduino connections
+function [handles] = close_arduino_connections(handles)
+disp('Closing Arduino Connections')
+    
+% Close the arduino connection if it is active
+for i = 1:length(handles.objs)
+    obj=handles.objs(i);
+    if ~isempty(obj)
+        if(strcmp(get(obj,'Status'),'open'))
+          fclose(obj);
+        end
+    end
+end
+
+%% Close all existing laser connections
+function [handles] = close_laser_connections(handles)
+disp('Closing laser connections');
+try
+    ophir_app=handles.ophir_app;
+    if ~isempty(ophir_app),
+        % Close the laser connections
+        ophir_app.StopAllStreams;
+        ophir_app.CloseAll;
+        ophir_app.delete;
+        clear ophir_app
+    end
+catch COM_error
+    
+end
+
+%% Delete the timer
+function [handles] = delete_timer(handles)
+delete(handles.timer);
+clear('handles.timer');
+%%
 
 %%% ------------------------------------------------------------------- %%%
 %%% GUI functions. Most of these are empty
@@ -569,6 +591,7 @@ guidata(hObject,handles);
 %% --- Executes on button press in startbutton - main start button
 function startbutton_Callback(hObject, ~, handles)
 
+
 if (~isfield(handles, 'read_from_file'))
     handles.read_from_file = true;
 end
@@ -590,7 +613,7 @@ case(1)
     handles.position_setpoints = [];
     if (handles.read_from_file)
         % Reading from input file
-        handles.position_setpoints = load('test_data_1245_s200.txt');
+        handles.position_setpoints = load('test_data_14.txt');
     else
         pause(1)
     end
@@ -622,7 +645,11 @@ case(1)
     handles.power_data=[];
     handles.Value = [];
     handles.Timestamp = [];
-    handles.timeout_delay = 25;
+    handles.timeout_delay = 5;
+    handles.function_index = 1;
+    handles.functions_array = {'simultaneous_perturbation_stochastic_approximation', 'test_function'};
+    handles.functions_initialized = zeros(1, length(handles.functions_array));
+    
     
     % Make the motos snug against the bolt
     %for i = 1:3
@@ -1085,5 +1112,12 @@ end
 delete(hObject);
 
 
-
-
+% --- Executes on button press in set_defaults.
+function set_defaults_Callback(hObject, eventdata, handles)
+% hObject    handle to set_defaults (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+set(handles.backlash_1, 'String', 6);
+set(handles.backlash_2, 'String', 52);
+set(handles.backlash_1_2, 'String', 46);
+set(handles.backlash_2_2, 'String', 32);

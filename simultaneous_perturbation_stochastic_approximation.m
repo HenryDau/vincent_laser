@@ -1,4 +1,4 @@
-function [posout, current_position, maxpower] = simultaneous_perturbation_stochastic_approximation(power, pos)
+function [posout, current_position, maxpower, done] = simultaneous_perturbation_stochastic_approximation(power, pos)
 %thetaout = [1 + power / 3; 1+ power / 3];
 %return;
 p=2; % dimension of search space
@@ -19,13 +19,18 @@ alpha=.25;
 gamma=.25;
 startflag=0;
 yminus=0;
+done = false;
+TIMES_TO_RUN = 5;
+
+posout=pos;
+pos=pos(pos_index);
 
 %
 % power<0 indicates this is the first time this function has been called
 %
-if (power<0),
+if (power<0)
     disp('Search Initialized')
-    theta=zeros(p,1);
+    theta=pos;
     lasttheta=theta;
     toppower=0;
     posplus=0;
@@ -35,11 +40,12 @@ if (power<0),
     ck=c/(ell+1)^gamma;
     delta = ck*(2*round(rand(p,1))-1);
     thetaout = theta;
-    posout=zeros(4,1);
+    current_position = theta;
+    maxpower = 1;
     posout(pos_index,:)=thetaout
     return;
 end;
-pos=pos(pos_index);
+
 k=k+1;
 if (mod(k,3) == 0)
     yminus = power;
@@ -81,7 +87,10 @@ else
     thetaout = theta + delta;
 end
 
-posout=zeros(4,1);
+if (k > TIMES_TO_RUN)
+    done = true;
+end
+
 posout(pos_index,1)=thetaout
 
 current_position=theta;
