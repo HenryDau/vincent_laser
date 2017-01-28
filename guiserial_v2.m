@@ -647,7 +647,7 @@ case(1)
     handles.Timestamp = [];
     handles.timeout_delay = 5;
     handles.function_index = 1;
-    handles.functions_array = {'simultaneous_perturbation_stochastic_approximation', 'test_function'};
+    handles.functions_array = {'simultaneous_perturbation_hillclimb'};
     handles.functions_initialized = zeros(1, length(handles.functions_array));
     
     
