@@ -12,6 +12,7 @@ persistent start_position;
 persistent pattern;
 persistent motor_shift;
 persistent toppower;
+persistent topposition;
 
 done=0;
 if (power<0) % initalization
@@ -29,6 +30,7 @@ end;
 
 if (power>toppower);
     toppower=power;
+    topposition=pos;
 end;
 
 if (state==0),
@@ -60,7 +62,7 @@ if (state==2)
         posout(motors_to_use) = posout(motors_to_use) + motor_shift;
     else
         motor_shift=0;
-        posout=start_position;
+        posout=topposition;
         done=1;
     end;
 end;
