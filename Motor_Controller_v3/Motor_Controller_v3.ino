@@ -5,7 +5,7 @@ const bool SERIAL_OUTPUT = true; // set to true to send data out serial line
 const bool SERIAL_DIAGNOSE = false; // set to true to send back what was recieved
 const float EncoderScaling = 2 * 3.141 / 1440; // Encoder counts to radians
 const int MAX_CHANGE = 50; // If the position of an encoder jumps by more than this number, flag an error
-const int MAX_SAT = 1000;  // Time before motor saturates
+const int MAX_SAT = 3000;  // Time before motor saturates
 const int DISABLE_THREE = true;
 
 // Digial/output
@@ -31,7 +31,7 @@ long int ts_3 = 0;
 const float P = 250;
 const float Pd = 12.5;
 const float PInt = 1000;
-const float umax = 150;
+const float umax = 200;
 
 // Switches
 //#define DECREASE 16

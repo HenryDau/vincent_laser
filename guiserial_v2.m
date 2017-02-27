@@ -645,8 +645,9 @@ case(1)
     handles.power_data=[];
     handles.Value = [];
     handles.Timestamp = [];
-    handles.timeout_delay = 5;
+    handles.timeout_delay = 8;
     handles.function_index = 1;
+%    handles.functions_array = {'raster_search','simultaneous_perturbation_hillclimb'};
     handles.functions_array = {'simultaneous_perturbation_hillclimb'};
     handles.functions_initialized = zeros(1, length(handles.functions_array));
     

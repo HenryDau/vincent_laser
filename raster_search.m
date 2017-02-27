@@ -1,8 +1,8 @@
 function [posout, current_position, maxpower, done] = raster_search(power, pos)
-EncoderScaling = 2 * 3.141 / 1440
-start = -200*EncoderScaling;
-increment = 100*EncoderScaling;
-final = 200*EncoderScaling;
+%EncoderScaling = 2 * 3.141 / 1440
+start = 0;
+increment = 20*pi/180;
+final = 40*pi/180;
 %motors_to_use = [1 2 4 5];
 motors_to_use = [1 2 3 4];   
 persistent state
@@ -14,9 +14,10 @@ persistent toppower;
 persistent topposition;
 
 done=0;
-if (power<0) % initalization
+if (power<-.1) % initalization
     state=0;
     start_position = pos;
+    topposition= pos;
     k=0;
     toppower=0;
     pattern=[];
