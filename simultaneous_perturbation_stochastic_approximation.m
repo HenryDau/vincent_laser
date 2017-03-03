@@ -28,7 +28,7 @@ pos=pos(pos_index);
 %
 % power<0 indicates this is the first time this function has been called
 %
-if (power<0)
+if (power<-.1)
     disp('Search Initialized')
     theta=pos;
     lasttheta=theta;
