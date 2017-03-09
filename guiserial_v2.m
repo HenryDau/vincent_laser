@@ -271,10 +271,14 @@ try
             end
         end
     end
+    
+    % Get the beam gage image
+    check_for_image(handles.folder, handles.time_stamp(end));
+    
     disp('data read')
     guidata(fighandle,handles);
 catch me
-    %me
+    me
     disp 'If this message shows up once, ignore it.'
 end
 
@@ -444,9 +448,10 @@ function write_to_file(handles)
 % Outputs the data to a new file of the name 'log_runX.txt' where x
 % makes the file_name unique
 counter = 1;
-while (exist(['log_run', int2str(counter), '.txt']) == 2)
+while (exist(['log_run', int2str(counter), '.txt'], 'file') == 2)
     counter = counter + 1;
 end
+
 fileID = fopen(['log_run', int2str(counter), '.txt'], 'w');
 [~,nrows] = size(handles.position_data);
 handles.power_data(:,end+1) = -1;
@@ -458,8 +463,11 @@ for row = 1:nrows
         fprintf(fileID,'%s', handles.position_data{1,row});
     end
 end
+
 fclose(fileID);
-disp(['Output to file: log_run', int2str(counter), '.txt']);
+movefile(['log_run', int2str(counter), '.txt'], handles.folder);
+
+disp(['Output to folder: ', handles.folder]);
 
 %% Open arduino connections
 function [handles] = open_arduino_connections(handles)
@@ -637,6 +645,14 @@ case(1)
     
     % Reset the calc_next_position checkbox
     set(handles.calc_next_pos, 'Value', 0);
+    
+    % Make a folder for this run
+    counter = 1;
+    while (exist(['run_', int2str(counter)], 'dir') == 7)
+        counter = counter + 1;
+    end
+    handles.folder = ['run_', int2str(counter)];
+    mkdir(handles.folder);
     
     % Data for each run
     handles.time_stamp = [];
