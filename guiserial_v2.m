@@ -58,12 +58,13 @@ function guiserial_v2_OpeningFcn(hObject, ~, handles, varargin)
 handles.output = hObject;
 handles.COMS = {'COM4', 'COM5'};
 %handles.COMS = {'/dev/cu.usbmodem1411', '/dev/cu.usbmodem1421'};
-set(handles.Motor1Slider,'SliderStep',[1/1440 10/1440])
-set(handles.Motor2Slider,'SliderStep',[1/1440 10/1440])
-set(handles.Motor3Slider,'SliderStep',[1/1440 10/1440])
-set(handles.Motor1Slider_2,'SliderStep',[1/1440 10/1440])
-set(handles.Motor2Slider_2,'SliderStep',[1/1440 10/1440])
-set(handles.Motor3Slider_2,'SliderStep',[1/1440 10/1440])
+EncoderScaling = 2 * 3.141 / 1440;
+set(handles.Motor1Slider,'SliderStep',[1/1440 10/1440] * EncoderScaling)
+set(handles.Motor2Slider,'SliderStep',[1/1440 10/1440] * EncoderScaling)
+set(handles.Motor3Slider,'SliderStep',[1/1440 10/1440]* EncoderScaling)
+set(handles.Motor1Slider_2,'SliderStep',[1/1440 10/1440]* EncoderScaling)
+set(handles.Motor2Slider_2,'SliderStep',[1/1440 10/1440]* EncoderScaling)
+set(handles.Motor3Slider_2,'SliderStep',[1/1440 10/1440]* EncoderScaling)
 
 % Update handles structure
 guidata(hObject, handles);
@@ -80,13 +81,44 @@ varargout{1} = handles.output;
 
 %% The function that changes a slider
 function change_slider(handles, index, pos, motor)
-if exist('handles'),
+EncoderScaling = 2 * 3.141 / 1440;
+if exist('handles')
   if isfield(handles,'objs')
       obj=handles.objs(index);
-      if(strcmp(get(obj,'Status'),'open'))    
-         fprintf(obj,'%s\n',['P', int2str(motor) ,int2str(pos)]);
+      if(strcmp(get(obj,'Status'),'open'))
+        [obj1, obj2, ~] = get_gui_objects(handles, index, motor);
+         write_to_arduino_with_backlash(obj1, obj2, handles, index, motor, 0, true);
+         %fprintf(obj,'%s\n',['P', int2str(motor) ,int2str(pos / EncoderScaling)]);
       end
   end
+end
+
+%% Get the backlash objects
+function [obj1, obj2, obj3] = get_gui_objects(handles, assem, motor)
+if (assem == 1 && motor == 1)
+    obj1 = handles.screw_pos_1;
+    obj2 = handles.backlash_1;
+    obj3 = handles.PositionSetpoint1;
+elseif (assem == 1 && motor == 1)
+    obj1 = handles.screw_pos_2;
+    obj2 = handles.backlash_2;
+    obj3 = handles.PositionSetpoint2;
+elseif (assem == 1 && motor == 1)
+    obj1 = handles.screw_pos_3;
+    obj2 = handles.backlash_3;
+    obj3 = handles.PositionSetpoint3;
+elseif (assem == 1 && motor == 1)
+    obj1 = handles.screw_pos_1_2;
+    obj2 = handles.backlash_1_2;
+    obj3 = handles.PositionSetpoint1_2;
+elseif (assem == 1 && motor == 1)
+    obj1 = handles.screw_pos_2_2;
+    obj2 = handles.backlash_2_2;
+    obj3 = handles.PositionSetpoint2_2;
+elseif (assem == 1 && motor == 1)
+    obj1 = handles.screw_pos_3_2;
+    obj2 = handles.backlash_3_2;
+    obj3 = handles.PositionSetpoint3_2;
 end
 
 %% Executes every period (.5 by default) when either 'Start' button is pressed
@@ -138,28 +170,28 @@ try
         %% Position stuff for assembly 1
         % Write to motor 1 assembly 1
         write_to_arduino_with_backlash(handles.screw_pos_1, handles.backlash_1, ...
-            handles, 1, 1, 2);
+            handles, 1, 1, 2, false);
 
         % Write to motor 2 assembly 1
         write_to_arduino_with_backlash(handles.screw_pos_2, handles.backlash_2, ...
-            handles, 1, 2, 3);
+            handles, 1, 2, 3, false);
 
         % Write to motor 3 assembly 1
         write_to_arduino_with_backlash(handles.screw_pos_3, handles.backlash_3, ...
-            handles, 1, 3, 4);
+            handles, 1, 3, 4, false);
 
         %% Position stuff for assembly 2
         % Write to motor 1 assembly 2
         write_to_arduino_with_backlash(handles.screw_pos_1_2, handles.backlash_1_2, ...
-            handles, 2, 1, 5);
+            handles, 2, 1, 5, false);
 
         % Write to motor 2 assembly 2
         write_to_arduino_with_backlash(handles.screw_pos_2_2, handles.backlash_2_2, ...
-            handles, 2, 2, 6);
+            handles, 2, 2, 6, false);
 
         % Write to motor 3 assembly 2
         write_to_arduino_with_backlash(handles.screw_pos_3_2, handles.backlash_3_2, ...
-            handles, 2, 3, 7);
+            handles, 2, 3, 7, false);
     end
 
   
@@ -422,15 +454,32 @@ end
 
 
 %% Write to an arduino using backlash data
-function write_to_arduino_with_backlash(object, object2, handles, port, motor, value_index)
+function write_to_arduino_with_backlash(object, object2, handles, port, motor, value_index, is_slider)
 EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
-set(object, 'String', handles.position_setpoints(handles.index, value_index) * EncoderScaling);    
-if (handles.position_setpoints(handles.index, value_index) - handles.position_setpoints(handles.index - 1, value_index) > 0)
-    write_to_arduino(handles, port, motor, handles.position_setpoints(handles.index, value_index));
-elseif (handles.position_setpoints(handles.index, value_index) - handles.position_setpoints(handles.index - 1, value_index) < 0)
-    write_to_arduino(handles, port, motor, ...
-        handles.position_setpoints(handles.index, value_index) - eval(get(object2,'String')));
+global motor_positions;
+if (~is_slider)
+    set(object, 'String', handles.position_setpoints(handles.index, value_index) * EncoderScaling);    
+    if (handles.position_setpoints(handles.index, value_index) - handles.position_setpoints(handles.index - 1, value_index) > 0)
+        write_to_arduino(handles, port, motor, handles.position_setpoints(handles.index, value_index));
+    elseif (handles.position_setpoints(handles.index, value_index) - handles.position_setpoints(handles.index - 1, value_index) < 0)
+        write_to_arduino(handles, port, motor, ...
+            handles.position_setpoints(handles.index, value_index) - eval(get(object2,'String')));
+    end
+    motor_positions(port*motor) = handles.position_setpoints(handles.index, value_index);
+else
+    [~, ~, obj3] = get_gui_objects(handles, port, motor);
+    pos=eval(get(obj3,'String'));
+    set(object, 'String', pos);
+    pos = pos / EncoderScaling;
+    
+    if (pos - motor_positions(port*motor) > 0)
+         write_to_arduino(handles, port, motor, pos);
+    elseif (pos - motor_positions(port*motor) < 0)
+        write_to_arduino(handles, port, motor, pos - eval(get(object2,'String')));
+    end
+    motor_positions(motor*port) = pos;
 end
+
 
 %% Writes a value to an arduino
 function write_to_arduino(handles, port, motor, value)
@@ -663,6 +712,10 @@ case(1)
     handles.Timestamp = [];
     handles.timeout_delay = 8;
     handles.function_index = 1;
+    
+    global motor_positions;
+    motor_positions = [0,0,0,0,0,0];    % Used for backlash when using sliders
+    
 %    handles.functions_array = {'raster_search','simultaneous_perturbation_hillclimb'};
     handles.functions_array = {'simultaneous_perturbation_hillclimb'};
     handles.functions_initialized = zeros(1, length(handles.functions_array));
@@ -1134,7 +1187,7 @@ function set_defaults_Callback(hObject, eventdata, handles)
 % hObject    handle to set_defaults (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-set(handles.backlash_1, 'String', 6);
-set(handles.backlash_2, 'String', 52);
-set(handles.backlash_1_2, 'String', 46);
-set(handles.backlash_2_2, 'String', 32);
+set(handles.backlash_1, 'String', 55);
+set(handles.backlash_2, 'String', 55);
+set(handles.backlash_1_2, 'String', 55);
+set(handles.backlash_2_2, 'String', 55);
