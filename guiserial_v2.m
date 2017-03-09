@@ -1,3 +1,11 @@
+%{
+
+TODO:
+Sliders update Pos w/o backlash (call write_to_arduino)
+Slider units in radians
+Input to function is pos w/o backlash
+
+%}
 function varargout = guiserial_v2(varargin)
 % GUISERIAL_V2 MATLAB code for guiserial_v2.fig
 %      GUISERIAL_V2, by itself, creates a new GUISERIAL_V2 or raises the existing
@@ -318,8 +326,8 @@ end
 function [handles] = update_positions(handles)
 try
     disp 'Updating position'
-    actual_pos = [eval(get(handles.Pos1Set,'String')); eval(get(handles.Pos2Set,'String'));
-                  eval(get(handles.Pos1Set_2,'String')); eval(get(handles.Pos2Set_2,'String'))];
+    actual_pos = [eval(get(handles.screw_pos_1,'String')); eval(get(handles.screw_pos_2,'String'));
+                  eval(get(handles.screw_pos_1_2,'String')); eval(get(handles.screw_pos_2_2,'String'))];
     %[pos, current_setpoint, maxpower] = simultaneous_perturbation_stochastic_approximation(eval(get(handles.laser_power, 'String')), actual_pos);
 
     % TODO: Add a done indicator to the function output
@@ -359,47 +367,6 @@ catch me
     me
     disp 'Error in stochastic function'
 end
-
-%% Function to get the setpoints based on current data
-function return_this = get_next_setpoints(handles)
-
-EncoderScaling = 2 * 3.141 / 1440; % Encoder counts to radians
-return_this = get_current_position(handles) / EncoderScaling + 1;
-
-%% --- Function to get the current positions
-function positions = get_current_position(handles)
-try
-    %current_pos1 = eval(get(handles.Pos1Set,'String')); 
-    %current_pos2 = eval(get(handles.Pos2Set,'String'));
-    %current_pos3 = eval(get(handles.Pos3Set,'String'));
-    %current_pos1_2 = eval(get(handles.Pos1Set_2,'String'));
-    %current_pos2_2 = eval(get(handles.Pos2Set_2,'String'));
-    %current_pos3_2 = eval(get(handles.Pos3Set_2,'String'));
-    
-    %current_pos1 = eval(get(handles.Pos1,'String')); 
-    %current_pos2 = eval(get(handles.Pos2,'String'));
-    %current_pos3 = eval(get(handles.Pos3,'String'));
-    %current_pos1_2 = eval(get(handles.Pos1_2,'String'));
-    %current_pos2_2 = eval(get(handles.Pos2_2,'String'));
-    %current_pos3_2 = eval(get(handles.Pos3_2,'String'));
-    
-    current_pos1 = eval(get(handles.screw_pos_1,'String')); 
-    current_pos2 = eval(get(handles.screw_pos_2,'String'));
-    current_pos3 = eval(get(handles.screw_pos_3,'String'));
-    current_pos1_2 = eval(get(handles.screw_pos_1_2,'String'));
-    current_pos2_2 = eval(get(handles.screw_pos_2_2,'String'));
-    current_pos3_2 = eval(get(handles.screw_pos_3_2,'String'));
-catch
-    current_pos1 = 0;
-    current_pos2 = 0;
-    current_pos3 = 0;
-    current_pos1_2 = 0;
-    current_pos2_2 = 0;
-    current_pos3_2 = 0;
-end
-
-positions = [current_pos1, current_pos2, current_pos3, ...
-    current_pos1_2, current_pos2_2, current_pos3_2];
 
 %% --- Function to get the current screw positions
 function positions = get_current_screw_positions(handles)
@@ -710,14 +677,16 @@ case(1)
     handles.power_data=[];
     handles.Value = [];
     handles.Timestamp = [];
-    handles.timeout_delay = 8;
+    handles.timeout_delay = 15;
     handles.function_index = 1;
     
     global motor_positions;
     motor_positions = [0,0,0,0,0,0];    % Used for backlash when using sliders
     
 %    handles.functions_array = {'raster_search','simultaneous_perturbation_hillclimb'};
-    handles.functions_array = {'simultaneous_perturbation_hillclimb'};
+    handles.functions_array = {'raster_search'};
+%    handles.functions_array = {'simultaneous_perturbation_hillclimb_separate_motors'};
+
     handles.functions_initialized = zeros(1, length(handles.functions_array));
     
     
