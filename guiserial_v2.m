@@ -131,6 +131,9 @@ end
 
 %% Executes every period (.5 by default) when either 'Start' button is pressed
 function timer_callback(~,~,fighandle)
+
+global time_start;
+
 try
     % Grab the figure handle
     handles=guidata(fighandle);
@@ -312,8 +315,12 @@ try
         end
     end
     
-    % Get the beam gage image
-    check_for_image(handles.folder, handles.time_stamp(end));
+    % Get the beam gage image  
+    if (time_start == -1)
+        if (check_for_image(handles.folder, handles.time_stamp(end)))
+            time_start = handles.time_stamp(end);
+        end
+    end
     
     disp('data read')
     guidata(fighandle,handles);
@@ -463,6 +470,8 @@ pause(.015);
 function write_to_file(handles)
 % Outputs the data to a new file of the name 'log_runX.txt' where x
 % makes the file_name unique
+global time_start;
+
 counter = 1;
 while (exist(['log_run', int2str(counter), '.txt'], 'file') == 2)
     counter = counter + 1;
@@ -482,6 +491,11 @@ end
 
 fclose(fileID);
 movefile(['log_run', int2str(counter), '.txt'], handles.folder);
+
+fileID = fopen(['time_start_', int2str(time_start), '.txt'], 'w');
+fprintf(fileID, '%5.2f', time_start);
+fclose(fileID);
+movefile(['time_start_', int2str(time_start), '.txt'], handles.folder);
 
 disp(['Output to folder: ', handles.folder]);
 
@@ -614,6 +628,8 @@ guidata(hObject,handles);
 
 %% --- Executes on button press in startbutton - main start button
 function startbutton_Callback(hObject, ~, handles)
+global motor_positions;
+global time_start;
 
 
 if (~isfield(handles, 'read_from_file'))
@@ -680,8 +696,8 @@ case(1)
     handles.timeout_delay = 15;
     handles.function_index = 1;
     
-    global motor_positions;
     motor_positions = [0,0,0,0,0,0];    % Used for backlash when using sliders
+    time_start = -1;
     
 %    handles.functions_array = {'raster_search','simultaneous_perturbation_hillclimb'};
     handles.functions_array = {'raster_search'};

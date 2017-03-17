@@ -1,7 +1,8 @@
-function check_for_image(dst, time)
+function image_there = check_for_image(dst, time)
 % This functio will check if an imag has been saved to the folder.
 %    It will then saved the image to a new folder corresponding to the
 %    current log and rename the image to the timestamp
+image_there = false;
 try
     if (isnan(time))
         time = 0;
@@ -17,10 +18,11 @@ try
 
     % Check if the file exists
     if (exist(path, 'file') == 2)
-        movefile(path, dst);
+        image_there = true;
+        %movefile(path, dst);
 
         % Give it the correct name
-        movefile([dst, filename], [dst, [int2str(time), '.binary.bgdata']]);
+        %movefile([dst, filename], [dst, [int2str(time), '.binary.bgdata']]);
     end
 catch OSError
     % For now, ignore OS errors.
