@@ -8,3 +8,7 @@ test_data.*
 findbacklash.m
 makesnug.m
 test*
+*example.m
+simple.m
+*.bgdata
+run*/
